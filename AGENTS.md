@@ -110,3 +110,8 @@ A high-performance, multi-tenant Enterprise Resource Planning (ERP) system split
 - **Audit Logging**: Use the `Auditable` trait on all models.
 - **Traceability**: Record old/new values, actor handle, and timestamp for all critical business actions.
 - **Compliance**: Verify that Audit logs are generated for every P0 and P1 priority operation.
+
+## 12. Skills Management CLI
+- **Usage**: Fetch and synchronize skills using `npx skills@latest add <repo>`.
+- **Repository**: Standard skills are maintained in `pphatdev/erp-prompt`.
+- **Automation**: Use this tool to bootstrap new ERP modules with the latest agent rules and standards.
