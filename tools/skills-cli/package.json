@@ -1,0 +1,29 @@
+{
+    "name": "skills",
+    "version": "1.0.0",
+    "description": "CLI to fetch and manage agent skills",
+    "main": "index.js",
+    "bin": {
+        "skills": "index.js"
+    },
+    "scripts": {
+        "test": "vitest run"
+    },
+    "keywords": [
+        "skills",
+        "agent",
+        "erp",
+        "cli"
+    ],
+    "author": "Antigravity",
+    "license": "MIT",
+    "dependencies": {
+        "commander": "^11.1.0",
+        "degit": "^2.8.4",
+        "fs-extra": "^11.2.0",
+        "chalk": "^5.3.0",
+        "ora": "^7.0.1",
+        "vitest": "^1.2.0"
+    },
+    "type": "module"
+}
