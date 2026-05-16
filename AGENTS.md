@@ -76,21 +76,37 @@ A high-performance, multi-tenant Enterprise Resource Planning (ERP) system split
 - **Scoped Storage**: Use `tenant_path()` for isolated file storage in `storage/tenants/{handle}/`.
 
 ## 5. Full-Stack ERP Testing & QA
-- **Backend (Pest)**: Prioritize **P0 Tenancy Isolation** tests. Assert that Tenant A cannot access Tenant B's data.
+- **Backend (Pest)**: Prioritize **P0 Tenancy Isolation** tests. Assert that Tenant A cannot access Tenant B's data. (See [Testing Skill](./skills/testing/skill.md))
 - **Frontend (Vitest/Playwright)**: Test component logic and critical user journeys (e.g., Payroll runs).
 - **Audit Logs**: Assert that critical business actions create appropriate entries in `audit_logs`.
+- **Priority Matrix**: Follow P0 (Security), P1 (Business Logic), P2 (UX/Audit) standards in all test suites.
 
-## 6. Docker Infrastructure & Containerization
+## 6. Feature-Specific Implementation (Modular)
+- **Standardized Documentation**: Every feature must have `rules.md`, `flow.md`, and `testing.md` in its module folder under `skills/features/`.
+- **Workflow Integrity**: Follow the step-by-step flows defined in Mermaid diagrams for all business logic implementation.
+- **Permission Mapping**: Use the `module.feature.action` pattern defined in `iam.md`.
+
+## 7. Postman & API Documentation
+- **Unified Collection**: Maintain all endpoints in `skills/postman/erp_collection.json`.
+- **Automation**: Include pre-request scripts for token/ID capture and realistic response examples.
+- **Headers**: Enforce the mandatory `tenant: {{tenant_id}}` header for all requests.
+
+## 8. Docker Infrastructure & Containerization
 - **Multi-Stage Builds**: Use Builder and Runner stages to keep production images small (Alpine-based).
 - **Service Orchestration**: Use `depends_on` with `service_healthy` to ensure DB readiness.
 - **Standard Template**: Follow the standardized `docker-compose.yml` boilerplate for initial setup.
 
-## 7. Version Control & Project Updates
+## 9. Version Control & Project Updates
 - **Versioning**: Follow `{MAJOR}.{MINOR}.{PATCH}`. Update `package.json`, `README.md`, and `SECURITY.md` simultaneously.
 - **Consistency**: Never bump a version in isolation. Ensure the API reflects the current state.
 
-## 8. Scalable WebSockets (Real-time)
+## 10. Scalable WebSockets (Real-time)
 - **Infrastructure**: Use Laravel Reverb or Redis Pub/Sub for multi-instance scaling.
 - **Tenant Scoping**: Prefix all channels with the tenant `handle`.
 - **Security**: Authenticate private channels via Laravel Passport.
 - **Optimization**: Queue all broadcast events; keep payloads minimal.
+
+## 11. Audit & Compliance
+- **Audit Logging**: Use the `Auditable` trait on all models.
+- **Traceability**: Record old/new values, actor handle, and timestamp for all critical business actions.
+- **Compliance**: Verify that Audit logs are generated for every P0 and P1 priority operation.

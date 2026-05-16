@@ -1,4 +1,4 @@
-# Design System & Aesthetic Standards: Enterprise ERP
+# This is Sample Design Standard for ERP Apps, can be used as reference
 
 ## 1. Design Philosophy
 Our design philosophy is centered around **"Clarity, Premium Quality, and Professionalism."** The ERP must feel powerful yet intuitive, using modern UI patterns like glassmorphism, subtle depth, and vibrant accent colors against a clean, enterprise-grade backdrop.
