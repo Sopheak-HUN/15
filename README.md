@@ -106,4 +106,4 @@ npm run dev
 Internal Enterprise License. All rights reserved.
 
 ---
-*Built with ❤️ by the Antigravity Team.*
+*Built with ⚠️ by [PPhat](https://github.com/pphatdev).* 

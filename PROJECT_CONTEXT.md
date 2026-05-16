@@ -1,4 +1,4 @@
-# Enterprise ERP Project Context
+# Enterprise ERP Project Context Skills
 
 ## Project Overview
 This is a high-performance, multi-tenant Enterprise Resource Planning (ERP) system designed for scalability and data isolation. It is split into a Laravel-based RESTful API and a Nuxt 3-based client application.
