@@ -1,6 +1,5 @@
-# Skill: Reporting & Analytics Implementation
+# Reporting & Analytics
 
-## Context
 Use this skill when building dashboards, custom report builders, or data visualization tools.
 
 ## Guidelines

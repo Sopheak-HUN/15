@@ -1,6 +1,5 @@
-# Skill: Project Management Implementation
+# Project Management
 
-## Context
 Use this skill when developing project planning, task tracking, and resource allocation features.
 
 ## Guidelines

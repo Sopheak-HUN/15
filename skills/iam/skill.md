@@ -1,6 +1,5 @@
-# Skill: Identity & Access Management (IAM) Implementation
+# Identity & Access Management (IAM)
 
-## Context
 Use this skill when managing tenant lifecycle, user authentication, role-based access control (RBAC), or auditing security events. This ensures the ERP remains secure, compliant, and properly isolated between tenants.
 
 ## Guidelines

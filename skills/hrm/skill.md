@@ -1,6 +1,5 @@
-# Skill: Human Resource Management (HRM) Implementation
+# Human Resource Management (HRM)
 
-## Context
 Use this skill when building employee management systems, payroll engines, leave tracking, or performance appraisal modules. This module handles sensitive PII (Personally Identifiable Information).
 
 ## Guidelines

@@ -1,6 +1,5 @@
-# Skill: eDocuments (Explorer) Implementation
+# eDocuments (Explorer)
 
-## Context
 Use this skill when building the centralized document repository, policy manager, or multi-system file explorer.
 
 ## Guidelines

@@ -1,6 +1,5 @@
-# Skill: Fleet Management Implementation
+# Fleet Management
 
-## Context
 Use this skill when implementing vehicle tracking, maintenance scheduling, and fuel management features.
 
 ## Guidelines

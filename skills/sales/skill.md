@@ -1,6 +1,5 @@
-# Skill: Sales & CRM Implementation
+# Sales & CRM
 
-## Context
 Use this skill when developing features for lead management, customer relationships, order processing, and invoicing. This ensures a seamless Order-to-Cash (O2C) workflow within the ERP.
 
 ## Guidelines

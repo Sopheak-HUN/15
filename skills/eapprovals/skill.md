@@ -1,6 +1,5 @@
-# Skill: eApprovals Implementation
+# eApprovals
 
-## Context
 Use this skill when developing approval workflows for any ERP module (Leave, Expense, Procurement). It provides a centralized engine for authorization.
 
 ## Guidelines

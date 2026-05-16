@@ -1,6 +1,5 @@
-# Skill: Fixed Asset Management Implementation
+# Fixed Asset Management
 
-## Context
 Use this skill when managing physical assets, calculating depreciation, and handling asset lifecycles.
 
 ## Guidelines

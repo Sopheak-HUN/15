@@ -1,6 +1,5 @@
-# Skill: Financial Management (FMS) Implementation
+# Financial Management (FMS)
 
-## Context
 Use this skill when implementing accounting logic, general ledger entries, tax compliance, or financial reporting. Accuracy and data integrity are paramount in this module.
 
 ## Guidelines

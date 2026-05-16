@@ -1,6 +1,5 @@
-# Skill: Inventory Management Implementation
+# Inventory Management
 
-## Context
 Use this skill when building warehouse management, procurement, and supply chain features.
 
 ## Guidelines

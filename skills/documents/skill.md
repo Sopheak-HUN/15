@@ -1,6 +1,5 @@
-# Skill: Document Management Implementation
+# Document Management
 
-## Context
 Use this skill when building advanced document workflows, versioning, and secure storage solutions.
 
 ## Guidelines
