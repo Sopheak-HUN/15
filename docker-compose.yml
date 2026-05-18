@@ -37,7 +37,7 @@ services:
       - APP_DEBUG=true
       - DB_CONNECTION=pgsql
       - DB_HOST=db
-      - DB_PORT=5432
+      - DB_PORT=5433
       - DB_DATABASE=erp_system
       - DB_USERNAME=erp_user
       - DB_PASSWORD=erp_secret
@@ -75,7 +75,7 @@ services:
       - APP_KEY=base64:7K5vP2bC+M2nS4pE9vJ1dF3xR9oQ8uA7vN2cM6rL1sE=
       - DB_CONNECTION=pgsql
       - DB_HOST=db
-      - DB_PORT=5432
+      - DB_PORT=5433
       - DB_DATABASE=erp_system
       - DB_USERNAME=erp_user
       - DB_PASSWORD=erp_secret
@@ -104,11 +104,11 @@ services:
       POSTGRES_USER: erp_user
       POSTGRES_PASSWORD: erp_secret
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - erp_db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U erp_user -d erp_system"]
+      test: [ "CMD-SHELL", "pg_isready -U erp_user -d erp_system" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -127,7 +127,7 @@ services:
     volumes:
       - erp_redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5

@@ -62,7 +62,22 @@
 - **Service Logic**: Use JSDoc-style comments for complex business logic explanations within service methods.
 
 ## 11. Environment & Initialization Pitfalls
+- **First Build `.env` Generation**: When initializing the project for the first time, you must always copy `.env.example` to `.env` and run `php artisan key:generate` to bootstrap the environment.
 - **Missing `artisan` File**: Always ensure the `artisan` binary exists at the root of the backend folder. If missing, `composer install` and `composer dump-autoload` will fail during `postAutoloadDump`.
 - **Composer OpenSSL Errors**: On local setups (especially Windows), ensure `extension=openssl` is uncommented in `php.ini`. Avoid disabling TLS natively in Composer.
 - **Tenant Routing Initialization**: Laravel 11 requires manual registration of the `tenant.php` routing file within `bootstrap/app.php` using the `then:` closure under `withRouting()`.
 - **Docker to Host Synchronization**: The `vendor/` folder must exist on the host machine for IDE code intelligence to function properly. Ensure volume binds or local `composer install` are handled correctly after Docker builds.
+- **Missing Base Controller**: If you encounter `Class "App\Http\Controllers\Controller" not found`, verify that the abstract base `Controller.php` exists in `app/Http/Controllers/`. Laravel 11 uses a minimalist abstract class for this by default.
+- **Tenancy Central Connection Error**: If `stancl/tenancy` throws `Database connection [central] not configured`, update `config/tenancy.php` to map `'central_connection' => env('DB_CONNECTION', 'sqlite')` instead of hardcoding `'central'`.
+- **Tenancy Database Manager Namespace Error**: If your IDE or runtime complains about `Unknown class: Stancl\Tenancy\Database\TenantDatabaseManagers\...`, manually edit `config/tenancy.php` and remove the `\Database` part from the namespace (it should be `Stancl\Tenancy\TenantDatabaseManagers\...`).
+- **Required PHP Extensions Missing**: If running migrations locally on Windows and you see `could not find driver (Connection: pgsql)` or `Call to undefined function mb_split()`, you must uncomment `extension=pdo_pgsql`, `extension=pgsql`, and `extension=mbstring` in your `php.ini` file.
+- **`.env` Database Misconfiguration**: Never set `DB_CONNECTION=central` in your `.env`. It must be set to the actual driver. You MUST use the following block exactly when initializing the `.env` database configuration to match the Docker container:
+  ```ini
+  # Central Database
+  DB_CONNECTION=pgsql
+  DB_HOST=127.0.0.1
+  DB_PORT=5433
+  DB_DATABASE=erp_system
+  DB_USERNAME=erp_user
+  DB_PASSWORD=erp_secret
+  ```
