@@ -42,6 +42,7 @@ Use this skill when creating or modifying Dockerfiles, updating Docker Compose c
 - **Small Images**: Prefer Alpine-based images over Debian/Ubuntu to reduce attack surface and deployment time.
 
 ## Troubleshooting
+- **Missing Vendor/Storage Directories (`No such file or directory`)**: When binding the host source code (`./backend:/var/www`) into the container, it overwrites the directories built during the image creation (like `vendor`, `storage`, and `bootstrap/cache`). To fix this, define anonymous volumes for them in `docker-compose.yml`: `- /var/www/vendor`, `- /var/www/bootstrap/cache`, and `- /var/www/storage`.
 - **Permission Denied**: Check the UID/GID mapping between the host and the container, especially for mounted volumes.
 - **Slow Performance**: On Windows/Mac, ensure the `cached` or `delegated` flags are used for volume mounts to improve I/O speed.
 - **Container Exit**: Check `docker logs <container_id>` for runtime errors or missing environment variables.

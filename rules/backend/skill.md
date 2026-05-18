@@ -1,7 +1,7 @@
 # Skill: Backend API & Business Logic Implementation
 
 ## Context
-Use this skill when implementing new API endpoints, business services, or database interactions in the Laravel backend. This ensures that the code follows enterprise-grade standards, maintains multi-tenant isolation, and is highly maintainable.
+Use this skill when implementing new API endpoints, business services, or database interactions. The project backend **MUST** be implemented exclusively in **Laravel 11+** (PHP 8.2+). This ensures that the code follows enterprise-grade standards, leverages Laravel's native ecosystem, maintains multi-tenant isolation, and is highly maintainable.
 
 ## Guidelines
 
