@@ -7,25 +7,76 @@ To maintain scalability in a large ERP, we use a **Modular Monolith** approach. 
 
 ```text
 /app
-├── Central/               # Landlord logic (Tenant management, Subscriptions, Global Settings)
+├── Console/               # Artisan commands (landlord + tenant)
+├── Exceptions/            # Custom exceptions
+├── Http/
 │   ├── Controllers/
+│   │   ├── Central/       # Landlord controllers (Tenant management, Subscriptions)
+│   │   └── Tenant/        # Tenant-scoped controllers (ERP modules)
+│   ├── Middleware/        # Global + tenant-specific middleware
+│   └── Requests/          # Form requests
+├── Models/
+│   ├── Central/           # Landlord models (e.g., Tenant, Subscription)
+│   ├── Tenant/            # Tenant-scoped models (e.g., Product, Invoice)
+│   └── Traits/            # Shared model traits
+├── Policies/              # Authorization policies
+├── Providers/
+│   ├── CentralServiceProvider.php   # Landlord service provider
+│   ├── TenantServiceProvider.php    # Tenant service provider
+│   └── ...               # Other providers (Auth, Route, etc.)
+├── Services/
+│   ├── Central/           # Landlord services (e.g., TenantCreator)
+│   └── Tenant/            # Tenant services (e.g., AccountingService)
+└── View/
+    └── Components/       # Blade components
+
+/database
+├── migrations/
+│   ├── central/           # Landlord migrations (tenants table, etc.)
+│   └── tenant/            # Tenant migrations (ERP tables)
+└── seeders/
+
+/routes
+├── central.php           # Landlord routes (tenant management)
+├── tenant.php            # Tenant routes (ERP modules)
+└── web.php                # Shared routes (if any)
+
+/config
+├── tenancy.php           # Tenancy configuration (stancl/tenancy)
+└── ...                   # Other Laravel configs
+
+/resources
+├── views/
+│   ├── central/           # Landlord views
+│   └── tenant/            # Tenant views
+└── lang/                 # Localization files
+
+/modules                  # Optional: ERP modules (if using Laravel Modules)
+├── Accounting/
+│   ├── Http/
+│   │   ├── Controllers/
+│   │   └── Requests/
 │   ├── Models/
-│   └── Services/
-├── Tenants/               # Primary ERP logic (Tenant-scoped)
-│   ├── Modules/           # Business domain modules
-│   │   ├── Accounting/    # Example Module
-│   │   │   ├── Controllers/
-│   │   │   ├── Models/
-│   │   │   ├── Services/
-│   │   │   ├── Resources/
-│   │   │   └── Routes/
-│   │   ├── Inventory/
-│   │   └── Sales/
-│   ├── Core/              # Tenant-specific shared logic
-│   │   ├── Traits/
-│   │   └── Middleware/
-│   └── Providers/         # Tenant-scoped service providers
-└── Shared/                # Logic shared by both Central and Tenants (Interfaces, Utilities)
+│   ├── Services/
+│   ├── Resources/        # API resources, collections
+│   ├── Routes/
+│   └── database/         # Module-specific migrations/seeders
+├── Inventory/
+└── Sales/
+
+/tenant                   # Tenant-specific files (if not using stancl/tenancy)
+└── public/               # Tenant assets (CSS, JS, images)
+
+/shared                   # Shared utilities, interfaces, helpers
+├── Contracts/            # Interfaces
+├── Helpers/              # Helper functions
+└── Traits/               # Shared traits
+
+/tests
+├── Feature/
+│   ├── Central/
+│   └── Tenant/
+└── Unit/
 ```
 
 ## 2. Structural Rules

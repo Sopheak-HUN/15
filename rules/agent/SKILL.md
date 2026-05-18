@@ -10,6 +10,7 @@ Use this skill to define how AI agents and human contributors should interact wi
 1. **Feature Implementation**: Follow the sequence of Rule Review -> Service Logic -> API Resource -> P0 Testing.
 2. **Security Patching**: Identify vulnerabilities, apply patches via overrides/resolutions, and verify via regression tests.
 3. **Module Extension**: Bootstrap new ERP features using the `skills-cli` to ensure all mandatory standard files are present.
+4. **Documentation Updates**: Any creation of a new feature or update to an existing feature MUST trigger an update to the corresponding Postman collection and relevant API documentation.
 
 ## Architectural Constraints
 - **Backend Framework**: The project backend **MUST** be implemented using **Laravel 11+** (PHP 8.2+). Do not use or suggest any other backend framework (e.g., Express, Django, Spring) for this ERP system.
