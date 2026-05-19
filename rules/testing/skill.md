@@ -18,12 +18,16 @@ Use this skill when implementing automated tests for new features, verifying bug
 - **Feature Tests**: Focus on API endpoints, authentication, and tenancy isolation (`tests/Feature`).
 - **Unit Tests**: Focus on isolated business logic in Services and Helpers (`tests/Unit`).
 
-### 2. Multi-Tenant Isolation (P0 Priority)
+### 2. Database Connection Isolation (P0 Priority)
+- **Isolation Rule**: Testing must NEVER run on the active development (`develop`) or production (`production`) database connections. Running tests on active environment databases will result in data wipe or corruption.
+- **Dedicated Test DB**: Configure a dedicated testing database connection (e.g., `DB_DATABASE=erp_system_test`) in `phpunit.xml` to ensure complete decoupling from the development/production environment.
+
+### 3. Multi-Tenant Isolation (P0 Priority)
 - **Isolation Checks**: Every test involving tenant data MUST verify that records are inaccessible from other tenant contexts.
 - **Example**: Assert that a request from Tenant B to a resource owned by Tenant A returns a `404` or `403`.
 - **Environment**: Use the `RefreshDatabase` trait and the `initializeTenancy()` helper for clean, tenant-scoped test runs.
 
-### 3. API & Data Verification
+### 4. API & Data Verification
 - **Status Codes**: Test for `200/201` (Success), `422` (Validation), and `403` (Unauthorized).
 - **JSON Structure**: Use `assertJsonStructure` to verify API contracts align with frontend expectations.
 - **Factories**: Always use Model Factories for data generation to ensure schema consistency.

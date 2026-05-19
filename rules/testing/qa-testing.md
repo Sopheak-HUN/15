@@ -40,6 +40,11 @@ Use this rule when implementing or verifying backend features in the Laravel Ent
 - **Database State**: Use the `RefreshDatabase` trait to ensure each test runs in a clean environment.
 - **Seeding**: Only use seeds for global configuration data (e.g., Currency codes, Country lists).
 
+### 5. Database Connection Isolation (P0)
+- **Strict Database Separation**: Tests must NEVER run on the active development (`develop`) or production (`production`) database connections. Running tests on these databases will erase or corrupt persistent data.
+- **Dedicated Test DB Configuration**: In `phpunit.xml` (or your `.env.testing` file), always override `DB_DATABASE` with a dedicated testing database name (e.g., `erp_system_test`) or configure a fully isolated test database.
+- **Pre-execution Check**: Ensure the active database connection during test execution points exclusively to the test-dedicated database.
+
 ## Best Practices
 - **Atomic Assertions**: Each `it()` or `test()` block should focus on one specific behavior or outcome.
 - **Audit Validation**: For business-critical operations (Accounting, HR), assert that an entry was created in the `audit_trails` table.
@@ -47,6 +52,25 @@ Use this rule when implementing or verifying backend features in the Laravel Ent
 - **Strict Typing**: Use type hints for all test helpers and mock objects.
 
 ## Troubleshooting
+- **Missing Configuration or TestCase**: If `php artisan test` fails with a missing/invalid `phpunit.xml.dist` error or a missing `Tests\TestCase` class:
+  - Create a standard `phpunit.xml` in the root of the `backend/` directory to define the test runner options and set `DB_DATABASE=erp_system_test` (MUST be a dedicated testing database; NEVER use the active development or production database `erp_system`).
+  - Create a base `tests/TestCase.php` class extending `Illuminate\Foundation\Testing\TestCase`.
+- **Relation "tenants" does not exist**: Because central and tenant migrations are decoupled (`database/migrations/central` vs `database/migrations/tenant`), standard `RefreshDatabase` commands will only execute root-level migrations.
+  - Due to PHP trait precedence, a trait imported directly on a test subclass (e.g., `use RefreshDatabase;`) will override inherited methods from a base `TestCase` class. To resolve this, define the `migrateFreshUsing()` method directly on your test class that imports the trait:
+    ```php
+    protected function migrateFreshUsing()
+    {
+        return [
+            '--path' => [
+                'database/migrations/central',
+                'database/migrations',
+                'database/migrations/tenant',
+            ],
+            '--drop-views' => $this->shouldDropViews(),
+            '--drop-types' => $this->shouldDropTypes(),
+        ];
+    }
+    ```
 - **Tenant Database Missing**: Ensure `php artisan tenants:migrate --database=testing` has been run if using a physical test database.
 - **Auth Persistence**: If using Sanctum, ensure the user is authenticated within the specific tenant context using `actingAs()`.
 - **JSON Attribute Mismatch**: Double-check PostgreSQL JSONB casting in models if JSON assertions are failing unexpectedly.
