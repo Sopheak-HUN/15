@@ -21,10 +21,22 @@ Every request MUST include the following headers:
 - **Folders**: Organize by business domain (e.g., `Authentication`, `Sales`, `Inventory`).
 - **Request Naming**: Use clear, action-oriented names (e.g., `Register User`, `Create Sales Order`).
 
-### 4. Request Body
-- **Format**: Always use `raw` JSON.
+### 4. Payload & Response Standards
+- **Format**: Always use `raw` JSON for payloads.
 - **Casing**: Use `camelCase` for all JSON keys (e.g., `firstName`, `phoneNumber`).
-- **Examples**: Provide a realistic example body for every `POST`, `PUT`, and `PATCH` request.
+- **Request Examples**: Provide a realistic example body for every `POST`, `PUT`, and `PATCH` request.
+- **List Page Response Examples**: Any index or listing endpoint must document a saved example response adhering to this pagination format:
+  ```json
+  {
+      "data": [],
+      "pagination": {
+          "page": 1,
+          "limit": 10,
+          "total": 14,
+          "totalPages": 2
+      }
+  }
+  ```
 
 ### 5. Automated Scripts
 - **Pre-request Scripts**: Use to set up temporary data or timestamps.

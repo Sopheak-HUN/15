@@ -51,6 +51,19 @@
     "errors": { "field_name": ["Specific error message"] }
   }
   ```
+- **Paginated List Response Format**:
+  All list/index API endpoints returning paginated data must follow this standard response structure:
+  ```json
+  {
+      "data": [],
+      "pagination": {
+          "page": 1,
+          "limit": 10,
+          "total": 14,
+          "totalPages": 2
+      }
+  }
+  ```
 - **Versioning**: Prefix all API routes with `/v1/`.
 
 ## 9. Testing

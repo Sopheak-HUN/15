@@ -22,10 +22,22 @@ Use this skill when developing or modifying API endpoints to ensure documentatio
   ```
 - **ID Capture**: Creation requests (`POST`) should capture the returned ID for subsequent `GET` or `DELETE` requests.
 
-### 4. Payload Standards
+### 4. Payload & Response Standards
 - **Format**: JSON body only.
 - **Casing**: Strict `camelCase` for all keys.
 - **Descriptions**: Documentation for every path variable and query parameter is required.
+- **List Pagination**: Index/list requests must contain a saved response example matching this pagination envelope:
+  ```json
+  {
+      "data": [],
+      "pagination": {
+          "page": 1,
+          "limit": 10,
+          "total": 14,
+          "totalPages": 2
+      }
+  }
+  ```
 
 ## Best Practices
 - **Saved Examples**: Include at least one `200 OK` response example for every request.

@@ -24,6 +24,18 @@ Use this skill when implementing new API endpoints, business services, or databa
 
 ### 4. API Design & Security
 - **CamelCase**: Ensure API responses use `camelCase` for keys.
+- **Paginated List Responses**: Index/list endpoints must use the following standard pagination envelope format:
+  ```json
+  {
+      "data": [],
+      "pagination": {
+          "page": 1,
+          "limit": 10,
+          "total": 14,
+          "totalPages": 2
+      }
+  }
+  ```
 - **Authentication**: Use Laravel Passport for API authentication.
 - **Authorization**: Use Policies (`php artisan make:policy`) to authorize actions based on tenant permissions.
 

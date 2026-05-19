@@ -119,3 +119,8 @@ A high-performance, multi-tenant Enterprise Resource Planning (ERP) system split
 - **Usage**: Fetch and synchronize skills using `npx skills@latest add <repo>`.
 - **Repository**: Standard skills are maintained in `pphatdev/erp-prompt`.
 - **Automation**: Use this tool to bootstrap new ERP modules with the latest agent rules and standards.
+
+## 13. Task & Infrastructure Tracking
+- **Task Context Storage**: Upon the first analysis of any task or feature, the agent **MUST** inspect the local `.task/` directory and create/maintain a task-specific folder with exact context and status trackers: `.task/{feature}/{task.md, context.md}`.
+- **Master Checklist Sync**: Synchronize and link all new feature scopes or significant refactors into the master progress registry at `.task/task.md` using appropriate checkbox markers (`[ ]` or `[x]`). This maintains perfect project traceability.
+
