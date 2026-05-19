@@ -1,6 +1,6 @@
 # 🛡️ Enterprise ERP (Multi-Tenant)
 
-![ERP Dashboard Hero](./design/assets/erp-hero.png)
+![ERP Dashboard Hero](./cover.png)
 
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](./package.json)
 [![Stack](https://img.shields.io/badge/stack-Laravel_11_%7C_Nuxt_3-orange.svg)](#tech-stack)
