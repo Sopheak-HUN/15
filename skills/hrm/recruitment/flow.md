@@ -161,9 +161,10 @@ This document outlines the **end-to-end flow for applicants** in the **Recruitme
   - **Endpoint**: `POST /applications/{application}/convert-to-employee` → `RecruitmentService::convertToEmployee`.
   - **Behavior**:
     - Idempotent — repeat calls on the same application return the existing employee.
-    - Dedupe-by-email — if an `Employee` with the same email already exists, link to that one rather than cloning.
+    - Dedupe-by-email — if an **active** `Employee` with the same email already exists, link to that one rather than cloning (response sets `linkedExisting: true` so the UI can toast accurately). Soft-deleted matches (terminated or post-revert) are ignored — a fresh row is created instead, so rehires get a new Employee record. The DB enforces this via a partial unique index on `email` (`deleted_at IS NULL` only).
     - Copies `department_id`, `position_id` from the vacancy, `expected_salary` → `base_salary`.
     - Stamps `applications.converted_at = now()`; creates the employee in `active` status.
+    - **Auto-assigns `employee_id`** in the `<prefix>-<NNNN>` pattern via `RecruitmentService::generateNextEmployeeId()`. Zero-indexed — on a fresh tenant the first auto-issued ID is `TT-0000`, then `TT-0001`, `TT-0002`, … Sequence is global across the tenant. **Terminated employees keep their IDs** (so historical references resolve), but **reverted employees free their IDs** (see the Revert sub-process below) so the next convert can re-issue them. The pad width is a floor — past `TT-9999` the format widens to `TT-10000` automatically. Prefix and pad live as class constants (`EMPLOYEE_ID_PREFIX`, `EMPLOYEE_ID_PAD`).
   - **Permissions**: `hrm.recruitment.write` + `hrm.employee.write` (policy `ApplicationPolicy::convert`).
 
 2. **Bulk Conversion**
@@ -174,7 +175,7 @@ This document outlines the **end-to-end flow for applicants** in the **Recruitme
 3. **Revert Conversion** (Undo window — 7 days)
   - **Trigger**: User clicks "Revert conversion" on a hired card whose `convertedAt` is within `RecruitmentService::REVERT_CONVERSION_WINDOW_DAYS` (= 7 days).
   - **Endpoint**: `POST /applications/{application}/revert-employee-conversion` → `RecruitmentService::revertEmployeeConversion`.
-  - **Behavior**: Soft-deletes the linked `Employee` (audit-preserving; default Eloquent queries hide trashed rows so the next conversion creates a fresh record). Nulls `applications.employee_id` and `applications.converted_at`.
+  - **Behavior**: Renames the linked `Employee`'s `employee_id` to `<original>-REV-<uniqid>` via an audited `update()`, then soft-deletes the row. The rename takes the original number out of the generator's `^<prefix>-(\d+)$` match set so the next convert can re-issue it (e.g. revert `TT-0003` → next convert returns `TT-0003`). The original ID is preserved inline in the renamed value for audit traceability. Nulls `applications.employee_id` and `applications.converted_at`.
   - **Refuses (422)** when: not `hired`, no linked employee, missing `converted_at`, or age > 7 days.
   - **Permissions**: `hrm.recruitment.write` + `hrm.employee.delete` (policy `ApplicationPolicy::revertConversion`). Stricter than `convert` because soft-deleting a workforce record can ripple into payroll/leave history.
   - **Outside the window**: recruiters must use the standard off-boarding path (`EmployeeService::terminateEmployee`) — the revert button hides automatically and the endpoint 422s.
