@@ -9,8 +9,6 @@ The HRM module manages the complete lifecycle of an employee, including recruitm
 - **Job Vacancy Management**: Requisitions, job descriptions, and locations.
 - **Applicant Pipeline**: Tracking candidates from sourcing to offer.
 - **Interview Management**: Scheduling and structured feedback.
-- **Candidate Quizzing Portal**: Secure magic-link authentication allowing candidates to log in without standard credentials to complete assessments.
-- **Interactive Quiz Engine**: Structured multi-choice/short-answer tests with automated grading and time tracking linked directly to the application.
 
 ### Workforce Management (Employees)
 - **Unified Profile**: Personal, employment, and contact data.

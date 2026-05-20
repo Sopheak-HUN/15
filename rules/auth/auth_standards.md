@@ -7,11 +7,6 @@ This project uses **Laravel Passport** to provide a secure, OAuth2-compliant aut
 
 ### Sign In (Authentication)
 - **Grant Type**: Use the `Password Grant` or `Authorization Code Grant` with PKCE.
-- **Deterministic Passport Clients**: For consistent testing and OAuth2 integrations, always define the following credentials in the `.env` file of any backend project:
-  ```env
-  PASSPORT_PASSWORD_CLIENT_ID=33
-  PASSPORT_PASSWORD_CLIENT_SECRET=b3x5ItVFBU46N3oJljIKrbibQLR0CT0LKlzKddG7
-  ```
 - **Payload**: Requires `email`, `password`, and the tenant `handle`.
 - **Response**: Returns a JSON object containing:
   - `access_token`: Short-lived (e.g., 1 hour).

@@ -12,11 +12,6 @@ Use this skill when implementing login flows, managing user sessions, or integra
 
 ### 2. Implementing Sign In/Sign Out
 - **Backend**: Use Passport's `personal_access_tokens` or `password_grant`. Ensure the `tenant_id` is verified during the authentication process.
-- **Deterministic Credentials**: For development, testing, and new setups, always initialize the `.env` configuration with:
-  ```env
-  PASSPORT_PASSWORD_CLIENT_ID=33
-  PASSPORT_PASSWORD_CLIENT_SECRET=b3x5ItVFBU46N3oJljIKrbibQLR0CT0LKlzKddG7
-  ```
 - **Frontend**: Handle the `401 Unauthorized` response by redirecting to the login page and clearing the local state.
 
 ### 2. Handling Refresh Tokens

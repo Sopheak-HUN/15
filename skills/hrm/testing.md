@@ -4,11 +4,11 @@
 
 | Priority | Category | Requirement / Test Case |
 | :--- | :--- | :--- |
-| **P0** | **Tenancy Isolation** | Employee PII, salaries, and candidate quiz attempts must be strictly scoped to `tenant_id`. |
-| **P0** | **Privacy & Security**| Magic-link tokens must be cryptographically secure; candidates must be strictly sandboxed from accessing any central, payroll, or other candidate data (403/404). |
-| **P1** | **Calculations** | Payroll engine must correctly apply tax/deduction logic. Quiz auto-grader must correctly score multi-choice/short-answers. |
-| **P1** | **API Contract** | Synchronized with `erp_collection.json`; correct answers must never be leaked in active quiz responses. |
-| **P2** | **Integration** | Leave requests trigger `eApprovals` workflows; quiz submissions transition the application pipeline status. |
+| **P0** | **Tenancy Isolation** | Employee PII and Salaries must be scoped to the `tenant_id`. |
+| **P0** | **Privacy** | Non-HR users must be blocked from seeing salary data (403). |
+| **P1** | **Calculations** | Payroll engine must correctly apply tax/deduction logic. |
+| **P1** | **API Contract** | Synchronized with `erp_collection.json`; uses `lastPayrollRunId`. |
+| **P2** | **Integration** | Leave requests must successfully trigger `eApprovals` workflows. |
 
 ## 2. Backend Testing (Pest PHP)
 
@@ -24,16 +24,10 @@
 - **Rule**: Employee records are tenant-scoped.
 - **Test Case**: Verify `tenant_id` is automatically applied via the `BelongsToTenant` trait.
 
-### Candidate Quizzing (P0 & P1)
-- **Rule**: Candidates using magic-links can only access their allocated quiz questions and attempts. Correct answers are omitted from the quiz payload.
-- **Test Case**: Assert candidate endpoint returns `403` when trying to request quiz correct answers or modifying scores directly. Verify completed quiz attempts are immutable.
-
 ## 2. Postman Verification
 - **Collection**: `postman.json`
-- **Tests**: Verify that sensitive fields (Salary, National ID) are omitted in the standard list response, and active quiz payloads omit correct answers.
+- **Tests**: Verify that sensitive fields (Salary, National ID) are omitted in the standard list response.
 
 ## 3. Integration
 - **Rule**: Leave requests must trigger an entry in `approvals` module.
 - **Test Case**: `assertDatabaseHas('approval_requests', ['module' => 'hrm'])`.
-- **Rule**: Quiz submissions must automatically transition candidate application status.
-- **Test Case**: Assert the application status transitions to `assessment_completed` upon quiz submit.
