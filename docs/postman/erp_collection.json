@@ -1,0 +1,203 @@
+{
+	"info": {
+		"name": "Enterprise ERP Collection",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "IAM Module",
+			"item": [
+				{
+					"name": "Central Routing",
+					"item": [
+						{
+							"name": "Onboard Tenant",
+							"request": {
+								"method": "POST",
+								"header": [{"key": "Content-Type", "value": "application/json"}],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Acme Corp\",\n    \"handle\": \"acme\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/tenants",
+									"host": ["{{base_url}}"],
+									"path": ["api", "tenants"]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Tenant API",
+					"item": [
+						{
+							"name": "Authentication",
+							"item": [
+								{
+									"name": "Login",
+									"request": {
+										"method": "POST",
+										"header": [{"key": "Content-Type", "value": "application/json"}],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"email\": \"admin@acme.com\",\n    \"password\": \"password\"\n}"
+										},
+										"url": {
+											"raw": "{{tenant_url}}/api/auth/login",
+											"host": ["{{tenant_url}}"],
+											"path": ["api", "auth", "login"]
+										}
+									}
+								},
+								{
+									"name": "Setup MFA",
+									"request": {
+										"method": "POST",
+										"header": [
+											{"key": "Authorization", "value": "Bearer {{token}}"}
+										],
+										"url": {
+											"raw": "{{tenant_url}}/api/auth/mfa/setup",
+											"host": ["{{tenant_url}}"],
+											"path": ["api", "auth", "mfa", "setup"]
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "Roles & Permissions",
+							"item": [
+								{
+									"name": "List Roles",
+									"request": {
+										"method": "GET",
+										"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+										"url": {
+											"raw": "{{tenant_url}}/api/iam/roles",
+											"host": ["{{tenant_url}}"],
+											"path": ["api", "iam", "roles"]
+										}
+									}
+								},
+								{
+									"name": "Create Role",
+									"request": {
+										"method": "POST",
+										"header": [
+											{"key": "Content-Type", "value": "application/json"},
+											{"key": "Authorization", "value": "Bearer {{token}}"}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"name\": \"Manager\",\n    \"description\": \"System Manager\"\n}"
+										},
+										"url": {
+											"raw": "{{tenant_url}}/api/iam/roles",
+											"host": ["{{tenant_url}}"],
+											"path": ["api", "iam", "roles"]
+										}
+									}
+								},
+								{
+									"name": "Sync Role Permissions",
+									"request": {
+										"method": "POST",
+										"header": [
+											{"key": "Content-Type", "value": "application/json"},
+											{"key": "Authorization", "value": "Bearer {{token}}"}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"permission_ids\": [1, 2, 3]\n}"
+										},
+										"url": {
+											"raw": "{{tenant_url}}/api/iam/roles/1/permissions",
+											"host": ["{{tenant_url}}"],
+											"path": ["api", "iam", "roles", "1", "permissions"]
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "Branding",
+							"item": [
+								{
+									"name": "Update Tenant Branding",
+									"request": {
+										"method": "PUT",
+										"header": [
+											{"key": "Content-Type", "value": "application/json"},
+											{"key": "Authorization", "value": "Bearer {{token}}"}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"primary_color\": \"#3b82f6\",\n    \"secondary_color\": \"#64748b\"\n}"
+										},
+										"url": {
+											"raw": "{{tenant_url}}/api/iam/branding",
+											"host": ["{{tenant_url}}"],
+											"path": ["api", "iam", "branding"]
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "Audit Logs",
+							"item": [
+								{
+									"name": "List Audit Logs",
+									"request": {
+										"method": "GET",
+										"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+										"url": {
+											"raw": "{{tenant_url}}/api/iam/audit-logs",
+											"host": ["{{tenant_url}}"],
+											"path": ["api", "iam", "audit-logs"]
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"pm.request.headers.add({key: 'tenant', value: pm.environment.get('tenant_id')});"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "tenant_url",
+			"value": "http://acme.localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "tenant_id",
+			"value": "acme",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "YOUR_BEARER_TOKEN",
+			"type": "string"
+		}
+	]
+}

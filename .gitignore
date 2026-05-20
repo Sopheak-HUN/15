@@ -1,13 +1,13 @@
-.task/*
+!.task/*
 .vscode
 .claude
 
 
 /backend/vendor
 /backend/.env
-/backend/
+!/backend/
 
 /frontend/node_modules
-/frontend
+!/frontend
 
-/docs
+!/docs
