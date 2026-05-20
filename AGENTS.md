@@ -131,4 +131,11 @@ A high-performance, multi-tenant Enterprise Resource Planning (ERP) system split
 - **Database Preservation**: The agent must avoid automatic deletion of database schemas, tables, records, or files. Destructive tasks (e.g. running `migrate:fresh` or `db:wipe`) must seek user verification and confirmation 2 to 3 times before execution.
 - **User Safety**: Enforce field-level encryption for sensitive PII (salaries, SSNs), automatically sanitize passwords/keys in logging channels, and strictly switch isolated tenant connections on every request.
 
+## 15. File Uploading & Storage Management
+- **Security Validation**: Always validate file types server-side using fileinfo magic bytes, block executable extensions, and sanitize filenames.
+- **Tenancy Scoping (P0)**: Store all uploaded assets strictly within the tenant-isolated directory via `tenant_path()`. Never expose direct paths to private assets; use cryptographically signed, short-lived URLs.
+- **Chunked Uploads**: Implement chunked file transfers for uploads larger than 10MB to maintain low memory footprints and avoid request timeouts.
+- **Traceability**: Record file metadata (size, hash, uploader, MIME type) in the attachments/media tables and ensure files are deleted or archived per data retention policies.
+
+
 
