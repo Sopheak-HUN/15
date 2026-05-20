@@ -145,6 +145,52 @@ This document outlines the **end-to-end flow for applicants** in the **Recruitme
 
 ---
 
+### **Stage 4.5: Hire → Employee Conversion**
+
+**Objective**: Promote a hired application into a workforce-registry `Employee` record so the new hire appears in directory listings, payroll, leave, and downstream HRM features.
+
+**Hard rule**: Transitioning the application to `hired` (Stage 4 Decision) **only changes status**. It does NOT create an Employee record. The link is an explicit, audit-bounded step performed by HR — never a side-effect of the kanban drag.
+
+#### **Sub-Processes**
+
+1. **Single Conversion**
+  - **Trigger**: Recruiter/HR clicks "Convert to Employee" on a `hired` application — surfaced on:
+    - The kanban card (`/candidates`) hired-column conditional slot.
+    - The application list (`/applications`) row kebab menu.
+    - The application details modal footer.
+  - **Endpoint**: `POST /applications/{application}/convert-to-employee` → `RecruitmentService::convertToEmployee`.
+  - **Behavior**:
+    - Idempotent — repeat calls on the same application return the existing employee.
+    - Dedupe-by-email — if an `Employee` with the same email already exists, link to that one rather than cloning.
+    - Copies `department_id`, `position_id` from the vacancy, `expected_salary` → `base_salary`.
+    - Stamps `applications.converted_at = now()`; creates the employee in `active` status.
+  - **Permissions**: `hrm.recruitment.write` + `hrm.employee.write` (policy `ApplicationPolicy::convert`).
+
+2. **Bulk Conversion**
+  - **Trigger**: User selects multiple `hired`-and-unlinked rows on `/applications` and clicks "Convert N to Employee" in the bulk toolbar.
+  - **Endpoint**: `POST /applications/bulk-convert-to-employee` with `{ ids: string[] }` (1–200 UUIDs).
+  - **Result shape**: `{ converted: int, alreadyLinked: string[], ineligible: string[], missing: string[], errors: Array<{id, message}> }`. The UI shows a partial-outcome toast (e.g. "3 converted · 1 already linked · 1 not hired") when the response isn't fully clean.
+
+3. **Revert Conversion** (Undo window — 7 days)
+  - **Trigger**: User clicks "Revert conversion" on a hired card whose `convertedAt` is within `RecruitmentService::REVERT_CONVERSION_WINDOW_DAYS` (= 7 days).
+  - **Endpoint**: `POST /applications/{application}/revert-employee-conversion` → `RecruitmentService::revertEmployeeConversion`.
+  - **Behavior**: Soft-deletes the linked `Employee` (audit-preserving; default Eloquent queries hide trashed rows so the next conversion creates a fresh record). Nulls `applications.employee_id` and `applications.converted_at`.
+  - **Refuses (422)** when: not `hired`, no linked employee, missing `converted_at`, or age > 7 days.
+  - **Permissions**: `hrm.recruitment.write` + `hrm.employee.delete` (policy `ApplicationPolicy::revertConversion`). Stricter than `convert` because soft-deleting a workforce record can ripple into payroll/leave history.
+  - **Outside the window**: recruiters must use the standard off-boarding path (`EmployeeService::terminateEmployee`) — the revert button hides automatically and the endpoint 422s.
+
+#### **State invariants**
+
+- `application.status = 'hired'` ⇏ `application.employee_id IS NOT NULL` — the two are decoupled by design. A hired application without an employee link is a normal, expected interim state.
+- `application.converted_at IS NOT NULL` ⇔ `application.employee_id IS NOT NULL` — both fields move together (set on convert, cleared on revert).
+- An `Employee` may have multiple historical applications pointing at it (re-hires) — `convertToEmployee` reuses the existing row when the email matches.
+
+#### **Output**
+
+- Application is linked to a workforce-registry Employee that is immediately visible in `GET /api/v1/employees` and ready for payroll, leave, and other downstream HRM modules.
+
+---
+
 ### **Stage 5: Offer & Onboarding**
 
 **Objective**: Secure the candidate and integrate them into the company.

@@ -18,8 +18,8 @@ Use this skill when building employee management systems, payroll engines, leave
 - **Employee Lifecycle**: Implement Hire -> Onboard -> Promote -> Offboard workflows.
 - **Data Privacy**: Encrypt sensitive fields like Salary, National ID, and Bank Account details.
 - **Self-Service Details Access**: Allow employees to securely view their own detailed employee profile. Implement ownership validation in policies to permit self-view without administrative read permissions, keeping sensitive fields gated appropriately (e.g. `base_salary` requires `hrm.payroll.read`).
-- **Recruitment History Linkage**: When a candidate is hired, link their `Application` record (including quiz attempts, structured interview feedback, panel scores, and digital offer files) to the newly created `Employee` profile to ensure continuous data traceability.
-- **Workforce Registry Visibility**: Upon successful hire, new employees must be provisioned with status `active` so they immediately display on the employee listing and registry views.
+- **Recruitment History Linkage**: When a candidate is hired, link their `Application` record (including quiz attempts, structured interview feedback, panel scores, and digital offer files) to the newly created `Employee` profile to ensure continuous data traceability. **Linkage is explicit, not implicit** — see "Hire → Employee Conversion Contract" in `rules.md` and Stage 4.5 in `recruitment/flow.md`. Status transitions to `hired` never side-effect an Employee creation; conversion is a deliberate `POST /applications/{id}/convert-to-employee` call (single or bulk), reversible for 7 days via `POST /applications/{id}/revert-employee-conversion`.
+- **Workforce Registry Visibility**: Upon successful conversion, new employees must be provisioned with status `active` so they immediately display on the employee listing and registry views.
 
 ### 2. Payroll Engine
 - **Calculations**: Standardize earnings (Base, Bonus) and deductions (Tax, Insurance) logic.
