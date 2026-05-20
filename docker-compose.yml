@@ -28,7 +28,7 @@ services:
     container_name: erp_app
     volumes:
       - ./backend:/var/www
-      - /var/www/vendor
+      - erp_vendor:/var/www/vendor
       - /var/www/bootstrap/cache
       - /var/www/storage
     environment:
@@ -37,7 +37,7 @@ services:
       - APP_DEBUG=true
       - DB_CONNECTION=pgsql
       - DB_HOST=db
-      - DB_PORT=5433
+      - DB_PORT=5432
       - DB_DATABASE=erp_system
       - DB_USERNAME=erp_user
       - DB_PASSWORD=erp_secret
@@ -67,7 +67,7 @@ services:
     command: php artisan queue:work --sleep=3 --tries=3
     volumes:
       - ./backend:/var/www
-      - /var/www/vendor
+      - erp_vendor:/var/www/vendor
       - /var/www/bootstrap/cache
       - /var/www/storage
     environment:
@@ -75,7 +75,7 @@ services:
       - APP_KEY=base64:7K5vP2bC+M2nS4pE9vJ1dF3xR9oQ8uA7vN2cM6rL1sE=
       - DB_CONNECTION=pgsql
       - DB_HOST=db
-      - DB_PORT=5433
+      - DB_PORT=5432
       - DB_DATABASE=erp_system
       - DB_USERNAME=erp_user
       - DB_PASSWORD=erp_secret
@@ -147,3 +147,4 @@ volumes:
     driver: local
   erp_redis_data:
     driver: local
+  erp_vendor:
