@@ -19,7 +19,7 @@ This is a high-performance, multi-tenant Enterprise Resource Planning (ERP) syst
 ## Critical Coding Standards
 ### 1. Multi-Tenant Isolation (P0)
 - **Backend**: Models must use the `BelongsToTenant` trait. All migrations must be placed in `database/migrations/tenant`.
-- **Frontend**: API requests must include the `X-Tenant-Handle` header. Use the `useApi` wrapper.
+- **Frontend**: API requests must include the `tenant` header carrying the tenant handle. Use the `useApi` wrapper. Resolution is performed by Stancl's `InitializeTenancyByRequestData` middleware, configured in `TenancyServiceProvider`.
 
 ### 2. Business Logic (P1)
 - **Service Layer**: Controllers must be thin; all business logic resides in `Services`.

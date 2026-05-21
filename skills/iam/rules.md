@@ -18,12 +18,16 @@ Permissions follow the standard `module.feature.action` pattern defined in [iam.
 
 ## 2. Implementation Standards
 
+### Tenant Header (P0)
+Every tenant-scoped request MUST include the `tenant` HTTP header carrying the tenant handle (e.g. `tenant: acme`). Stancl's `InitializeTenancyByRequestData` middleware reads this header (or the `?tenant=` query param as a fallback) and swaps the active DB connection before the controller runs. Subdomain-based identification is not used. Full reference: [`docs/api-authentication.md`](../../docs/api-authentication.md).
+
 ### Core Authentication Flow
-1. **Credentials Verification**: Authenticate via Passport.
-2. **MFA Challenge**: Require OTP for admin/finance roles.
-3. **Tenant Context**: Set global `tenant_id` scope for all subsequent queries.
-4. **Authorization**: Check `module.feature.action` before execution.
-5. **Audit**: Log activity details (actor, timestamp, payload).
+1. **Tenant Resolution**: Stancl middleware reads the `tenant` header and initializes the tenant DB connection.
+2. **Credentials Verification**: Authenticate via Passport (`Auth::attempt`) — the lookup hits the now-active tenant `users` table.
+3. **MFA Challenge**: Require OTP for admin/finance roles.
+4. **Token Issuance**: `$user->createToken()` uses the per-tenant `oauth_clients` row + the shared signing keys at `storage/oauth-*.key`.
+5. **Authorization**: Check `module.feature.action` before execution.
+6. **Audit**: Log activity details (actor, timestamp, payload).
 
 ### Backend (Laravel)
 - **Namespace**: `App\Tenants\Modules\IAM`
@@ -35,3 +39,4 @@ Permissions follow the standard `module.feature.action` pattern defined in [iam.
 - **Path**: `src/modules/iam/`
 - **Directives**: Use `v-can` to restrict access to the Admin Dashboard.
 - **Security**: Sensitive tokens must be stored in HttpOnly cookies.
+- **Tenant Header**: The `useApi` wrapper MUST inject the `tenant` header on every outgoing request (read from the active tenant handle in the auth store or route). A request without it will not resolve a tenant context and will fail.

@@ -37,4 +37,6 @@ Use this skill when managing tenant lifecycle, user authentication, role-based a
 ## Troubleshooting
 - **Unauthorized (403)**: Check if the user's role has the specific permission key in the `role_permissions` table.
 - **Token Expired**: Ensure the frontend handles refresh tokens correctly using the Passport OAuth2 flow.
-- **Tenant Mismatch**: If a user logs into the wrong tenant, verify the `X-Tenant-Handle` header matches the user's assigned tenant.
+- **Tenant Mismatch**: If a user logs into the wrong tenant, verify the `tenant` request header matches the user's assigned tenant handle. Tenant resolution is wired via Stancl's `InitializeTenancyByRequestData` middleware (see [TenancyServiceProvider.php](../../backend/app/Providers/TenancyServiceProvider.php)).
+- **`Invalid key supplied` on login**: Passport keys live at `storage/oauth-*.key`. On a fresh container, file perms must be 0600 (the entrypoint handles this on boot). If running outside Docker, set perms manually.
+- **`Personal access client not found`**: Each tenant DB needs its own oauth_clients row. Run `php artisan tenants:seed --tenants=<handle>` after onboarding.

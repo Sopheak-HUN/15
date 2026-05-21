@@ -22,5 +22,10 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Passport::useClientModel(PassportClient::class);
+
+        // Pin Passport keys to the un-tenancied storage path. Stancl's
+        // FilesystemTenancyBootstrapper rewrites storage_path() to a
+        // tenant-suffixed path, which would otherwise break key loading.
+        Passport::loadKeysFrom(base_path('storage'));
     }
 }

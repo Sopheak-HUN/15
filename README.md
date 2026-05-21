@@ -62,32 +62,61 @@ To maintain the integrity of this enterprise system, all contributors (human and
 ## 🛠️ Quick Start
 
 ### 1. Prerequisites
-- Docker & Docker Compose
-- PHP 8.2+ / Node 20+
-- Composer & NPM
+- Docker Desktop (with Docker Compose v2)
+- Node 20+ for the frontend (when present)
 
-### 2. Installation
+### 2. Boot the backend stack
 ```bash
 # Clone the repository
 git clone https://github.com/pphatdev/erp-prompt.git
+cd erp-prompt
 
-# Initialize Backend
-cd backend && composer install && php artisan migrate
+# Bring up nginx, php-fpm, queue worker, postgres, redis
+docker compose up -d
 
-# Initialize Frontend
-cd ../frontend && npm install
-
-# Bootstrap Skills
-npx skills add pphatdev/erp-prompt
+# Run central migrations + central seed (creates the Passport personal-access client)
+docker compose exec app php artisan migrate --force
+docker compose exec app php artisan db:seed --force
 ```
 
-### 3. Running Locally
-```bash
-# Start Backend
-php artisan serve
+The API is now reachable at `http://localhost:8000`.
 
-# Start Frontend
-npm run dev
+### 3. Onboard your first tenant
+```bash
+# Create the tenant row + database (CreateDatabase + MigrateDatabase pipeline runs synchronously)
+curl -X POST http://localhost:8000/api/tenants \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Acme Corp","handle":"acme"}'
+
+# Seed users, roles, permissions, and the per-tenant Passport client
+docker compose exec app php artisan tenants:seed --tenants=acme
+```
+
+### 4. Log in
+Tenant identification is **header-based** — every tenant-scoped request must include `tenant: <handle>`. No subdomain or hosts-file entry needed.
+
+```bash
+curl -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -H "tenant: acme" \
+  -d '{"email":"admin@erp.local","password":"Admin@1234!"}'
+```
+
+Default seeded credentials (change before any non-local environment):
+
+| Role | Email | Password |
+|---|---|---|
+| Super Admin | `admin@erp.local` | `Admin@1234!` |
+| Staff | `staff@erp.local` | `Staff@1234!` |
+
+### 5. Explore the API
+Import [`docs/postman/erp_collection.json`](docs/postman/erp_collection.json) into Postman. The collection-level pre-request script adds `tenant: {{tenant_id}}` to every request and capture scripts chain `token`, `role_id`, and `permission_ids` automatically. Recommended run order: **Onboard Tenant → Login → List Permissions → Create Role → Sync Role Permissions → List Audit Logs**.
+
+Full auth and tenant-header reference: [`docs/api-authentication.md`](docs/api-authentication.md).
+
+### 6. Frontend (optional)
+```bash
+cd frontend && npm install && npm run dev
 ```
 
 ---

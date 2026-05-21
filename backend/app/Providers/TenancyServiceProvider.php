@@ -103,6 +103,11 @@ class TenancyServiceProvider extends ServiceProvider
         $this->mapRoutes();
 
         $this->makeTenancyMiddlewareHighestPriority();
+
+        // Identify tenant via the `tenant` HTTP header carrying the tenant id/handle.
+        // Falls back to ?tenant= query param when the header is absent.
+        Middleware\InitializeTenancyByRequestData::$header = 'tenant';
+        Middleware\InitializeTenancyByRequestData::$queryParameter = 'tenant';
     }
 
     protected function bootEvents()

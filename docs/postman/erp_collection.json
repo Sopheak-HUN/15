@@ -1,6 +1,7 @@
 {
 	"info": {
 		"name": "Enterprise ERP Collection",
+		"description": "Multi-tenant ERP API. Tenant identification is header-based: every tenant-scoped request sends `tenant: {{tenant_id}}` (added automatically by the collection-level pre-request script). No subdomain is required — all requests hit `{{base_url}}` (default http://localhost:8000). Run requests in order from top to bottom on a clean DB: Onboard Tenant → (shell) tenants:seed → Login → IAM operations.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -9,9 +10,26 @@
 			"item": [
 				{
 					"name": "Central Routing",
+					"description": "Endpoints served by the central host (no tenant context). No `tenant` header is required for these.",
 					"item": [
 						{
 							"name": "Onboard Tenant",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"pm.test('Tenant onboarded', function () {",
+											"    pm.response.to.have.status(200);",
+											"    const json = pm.response.json();",
+											"    pm.expect(json.success).to.eql(true);",
+											"    pm.environment.set('tenant_id', json.tenant.handle);",
+											"});"
+										]
+									}
+								}
+							],
 							"request": {
 								"method": "POST",
 								"header": [{"key": "Content-Type", "value": "application/json"}],
@@ -23,45 +41,97 @@
 									"raw": "{{base_url}}/api/tenants",
 									"host": ["{{base_url}}"],
 									"path": ["api", "tenants"]
-								}
+								},
+								"description": "Creates a new tenant record + tenant database (CreateDatabase + MigrateDatabase pipeline runs synchronously). You MUST then run `php artisan tenants:seed` for that tenant before logging in."
 							}
 						}
 					]
 				},
 				{
 					"name": "Tenant API",
+					"description": "All requests below hit `{{base_url}}` and rely on the `tenant: {{tenant_id}}` header (added by the collection-level pre-request script) for tenant resolution via Stancl's InitializeTenancyByRequestData middleware.",
 					"item": [
 						{
 							"name": "Authentication",
 							"item": [
 								{
 									"name": "Login",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"type": "text/javascript",
+												"exec": [
+													"pm.test('Login succeeded and token captured', function () {",
+													"    pm.response.to.have.status(200);",
+													"    const json = pm.response.json();",
+													"    pm.expect(json.success).to.eql(true);",
+													"    pm.environment.set('token', json.data.token);",
+													"    pm.environment.set('user_id', json.data.user.id);",
+													"});"
+												]
+											}
+										}
+									],
 									"request": {
 										"method": "POST",
 										"header": [{"key": "Content-Type", "value": "application/json"}],
 										"body": {
 											"mode": "raw",
-											"raw": "{\n    \"email\": \"admin@acme.com\",\n    \"password\": \"password\"\n}"
+											"raw": "{\n    \"email\": \"admin@erp.local\",\n    \"password\": \"Admin@1234!\"\n}"
 										},
 										"url": {
-											"raw": "{{tenant_url}}/api/auth/login",
-											"host": ["{{tenant_url}}"],
+											"raw": "{{base_url}}/api/auth/login",
+											"host": ["{{base_url}}"],
 											"path": ["api", "auth", "login"]
-										}
+										},
+										"description": "Authenticates against the tenant's user table and issues a Passport personal-access token. Default seeded credentials: `admin@erp.local / Admin@1234!` (super-admin), `staff@erp.local / Staff@1234!` (staff)."
+									}
+								},
+								{
+									"name": "Logout",
+									"request": {
+										"method": "POST",
+										"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+										"url": {
+											"raw": "{{base_url}}/api/auth/logout",
+											"host": ["{{base_url}}"],
+											"path": ["api", "auth", "logout"]
+										},
+										"description": "Revokes the current Passport access token."
 									}
 								},
 								{
 									"name": "Setup MFA",
 									"request": {
 										"method": "POST",
+										"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+										"url": {
+											"raw": "{{base_url}}/api/auth/mfa/setup",
+											"host": ["{{base_url}}"],
+											"path": ["api", "auth", "mfa", "setup"]
+										},
+										"description": "⚠️ Stub. Returns a hardcoded success message; TOTP generation is not yet implemented (AuthController::setupMfa)."
+									}
+								},
+								{
+									"name": "Verify MFA",
+									"request": {
+										"method": "POST",
 										"header": [
+											{"key": "Content-Type", "value": "application/json"},
 											{"key": "Authorization", "value": "Bearer {{token}}"}
 										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"code\": \"123456\"\n}"
+										},
 										"url": {
-											"raw": "{{tenant_url}}/api/auth/mfa/setup",
-											"host": ["{{tenant_url}}"],
-											"path": ["api", "auth", "mfa", "setup"]
-										}
+											"raw": "{{base_url}}/api/auth/mfa/verify",
+											"host": ["{{base_url}}"],
+											"path": ["api", "auth", "mfa", "verify"]
+										},
+										"description": "⚠️ Stub. Returns a hardcoded success message; TOTP verification is not yet implemented."
 									}
 								}
 							]
@@ -71,18 +141,52 @@
 							"item": [
 								{
 									"name": "List Roles",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"type": "text/javascript",
+												"exec": [
+													"pm.test('Roles fetched', function () {",
+													"    pm.response.to.have.status(200);",
+													"    const json = pm.response.json();",
+													"    if (Array.isArray(json.data) && json.data.length > 0) {",
+													"        pm.environment.set('role_id', json.data[0].id);",
+													"    }",
+													"});"
+												]
+											}
+										}
+									],
 									"request": {
 										"method": "GET",
 										"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
 										"url": {
-											"raw": "{{tenant_url}}/api/iam/roles",
-											"host": ["{{tenant_url}}"],
+											"raw": "{{base_url}}/api/iam/roles",
+											"host": ["{{base_url}}"],
 											"path": ["api", "iam", "roles"]
-										}
+										},
+										"description": "Lists all tenant roles with their permissions. Captures the first role's UUID into `{{role_id}}` for downstream requests."
 									}
 								},
 								{
 									"name": "Create Role",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"type": "text/javascript",
+												"exec": [
+													"pm.test('Role created', function () {",
+													"    pm.response.to.have.status(200);",
+													"    const json = pm.response.json();",
+													"    pm.expect(json.success).to.eql(true);",
+													"    pm.environment.set('role_id', json.data.id);",
+													"});"
+												]
+											}
+										}
+									],
 									"request": {
 										"method": "POST",
 										"header": [
@@ -94,14 +198,91 @@
 											"raw": "{\n    \"name\": \"Manager\",\n    \"description\": \"System Manager\"\n}"
 										},
 										"url": {
-											"raw": "{{tenant_url}}/api/iam/roles",
-											"host": ["{{tenant_url}}"],
+											"raw": "{{base_url}}/api/iam/roles",
+											"host": ["{{base_url}}"],
 											"path": ["api", "iam", "roles"]
 										}
 									}
 								},
 								{
+									"name": "Update Role",
+									"request": {
+										"method": "PUT",
+										"header": [
+											{"key": "Content-Type", "value": "application/json"},
+											{"key": "Authorization", "value": "Bearer {{token}}"}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"name\": \"Senior Manager\",\n    \"description\": \"Updated description\"\n}"
+										},
+										"url": {
+											"raw": "{{base_url}}/api/iam/roles/{{role_id}}",
+											"host": ["{{base_url}}"],
+											"path": ["api", "iam", "roles", "{{role_id}}"]
+										}
+									}
+								},
+								{
+									"name": "Delete Role",
+									"request": {
+										"method": "DELETE",
+										"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+										"url": {
+											"raw": "{{base_url}}/api/iam/roles/{{role_id}}",
+											"host": ["{{base_url}}"],
+											"path": ["api", "iam", "roles", "{{role_id}}"]
+										}
+									}
+								},
+								{
+									"name": "List Permissions",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"type": "text/javascript",
+												"exec": [
+													"pm.test('Permissions fetched', function () {",
+													"    pm.response.to.have.status(200);",
+													"    const json = pm.response.json();",
+													"    if (Array.isArray(json.data) && json.data.length > 0) {",
+													"        pm.environment.set('permission_ids', JSON.stringify(json.data.slice(0, 3).map(p => p.id)));",
+													"    }",
+													"});"
+												]
+											}
+										}
+									],
+									"request": {
+										"method": "GET",
+										"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+										"url": {
+											"raw": "{{base_url}}/api/iam/permissions",
+											"host": ["{{base_url}}"],
+											"path": ["api", "iam", "permissions"]
+										},
+										"description": "Lists all permissions seeded for the tenant. Captures the first three permission UUIDs into `{{permission_ids}}` as a JSON array string for use by `Sync Role Permissions`."
+									}
+								},
+								{
 									"name": "Sync Role Permissions",
+									"event": [
+										{
+											"listen": "prerequest",
+											"script": {
+												"type": "text/javascript",
+												"exec": [
+													"const ids = pm.environment.get('permission_ids');",
+													"if (ids) {",
+													"    pm.variables.set('_permission_ids_body', ids);",
+													"} else {",
+													"    pm.variables.set('_permission_ids_body', '[]');",
+													"}"
+												]
+											}
+										}
+									],
 									"request": {
 										"method": "POST",
 										"header": [
@@ -110,13 +291,14 @@
 										],
 										"body": {
 											"mode": "raw",
-											"raw": "{\n    \"permission_ids\": [1, 2, 3]\n}"
+											"raw": "{\n    \"permission_ids\": {{_permission_ids_body}}\n}"
 										},
 										"url": {
-											"raw": "{{tenant_url}}/api/iam/roles/1/permissions",
-											"host": ["{{tenant_url}}"],
-											"path": ["api", "iam", "roles", "1", "permissions"]
-										}
+											"raw": "{{base_url}}/api/iam/roles/{{role_id}}/permissions",
+											"host": ["{{base_url}}"],
+											"path": ["api", "iam", "roles", "{{role_id}}", "permissions"]
+										},
+										"description": "Permission IDs are UUIDs. The pre-request script injects `{{permission_ids}}` (set by `List Permissions`) into the request body."
 									}
 								}
 							]
@@ -134,13 +316,14 @@
 										],
 										"body": {
 											"mode": "raw",
-											"raw": "{\n    \"primary_color\": \"#3b82f6\",\n    \"secondary_color\": \"#64748b\"\n}"
+											"raw": "{\n    \"logo_path\": \"branding/acme-logo.png\",\n    \"primary_color\": \"#3b82f6\",\n    \"secondary_color\": \"#64748b\"\n}"
 										},
 										"url": {
-											"raw": "{{tenant_url}}/api/iam/branding",
-											"host": ["{{tenant_url}}"],
+											"raw": "{{base_url}}/api/iam/branding",
+											"host": ["{{base_url}}"],
 											"path": ["api", "iam", "branding"]
-										}
+										},
+										"description": "⚠️ Known bug: the `tenants` table does not yet have `logo_path`/`primary_color`/`secondary_color` columns, so this endpoint will currently fail with a SQL error. Migration must be added before this works."
 									}
 								}
 							]
@@ -154,10 +337,11 @@
 										"method": "GET",
 										"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
 										"url": {
-											"raw": "{{tenant_url}}/api/iam/audit-logs",
-											"host": ["{{tenant_url}}"],
+											"raw": "{{base_url}}/api/iam/audit-logs",
+											"host": ["{{base_url}}"],
 											"path": ["api", "iam", "audit-logs"]
-										}
+										},
+										"description": "Paginated (50 per page) audit entries written by the Auditable trait. Currently only attached to Role and Permission models."
 									}
 								}
 							]
@@ -173,7 +357,10 @@
 			"script": {
 				"type": "text/javascript",
 				"exec": [
-					"pm.request.headers.add({key: 'tenant', value: pm.environment.get('tenant_id')});"
+					"const tenantId = pm.environment.get('tenant_id');",
+					"if (tenantId) {",
+					"    pm.request.headers.upsert({ key: 'tenant', value: tenantId });",
+					"}"
 				]
 			}
 		}
@@ -185,18 +372,28 @@
 			"type": "string"
 		},
 		{
-			"key": "tenant_url",
-			"value": "http://acme.localhost:8000",
-			"type": "string"
-		},
-		{
 			"key": "tenant_id",
 			"value": "acme",
 			"type": "string"
 		},
 		{
 			"key": "token",
-			"value": "YOUR_BEARER_TOKEN",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "role_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "permission_ids",
+			"value": "[]",
 			"type": "string"
 		}
 	]
