@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { mode, toggle } = useTheme()
+const { t } = useI18n()
 </script>
 
 <template>
@@ -9,14 +10,17 @@ const { mode, toggle } = useTheme()
         <span class="size-8 rounded-lg bg-primary-600 grid place-items-center text-white">
           <i class="pi pi-bolt text-sm" />
         </span>
-        <span>Enterprise ERP</span>
+        <span>{{ t('app.brand') }}</span>
       </NuxtLink>
-      <Button
-        :icon="mode === 'dark' ? 'pi pi-sun' : 'pi pi-moon'"
-        text rounded severity="secondary"
-        @click="() => toggle()"
-        aria-label="Toggle dark mode"
-      />
+      <div class="flex items-center gap-2">
+        <LocaleSwitcher />
+        <Button
+          :icon="mode === 'dark' ? 'pi pi-sun' : 'pi pi-moon'"
+          text rounded severity="secondary"
+          :aria-label="t('theme.toggle')"
+          @click="() => toggle()"
+        />
+      </div>
     </header>
 
     <main class="flex-1 grid place-items-center px-4 pb-12">
@@ -26,7 +30,7 @@ const { mode, toggle } = useTheme()
     </main>
 
     <footer class="text-center text-xs text-surface-500 pb-6">
-      &copy; {{ new Date().getFullYear() }} Enterprise ERP
+      {{ t('app.copyright', { year: new Date().getFullYear() }) }}
     </footer>
   </div>
 </template>

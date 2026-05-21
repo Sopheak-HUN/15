@@ -1,0 +1,907 @@
+{
+  "app": {
+    "title": "ERP — Enterprise Resource Planning",
+    "brand": "Enterprise ERP",
+    "short": "ERP",
+    "copyright": "© {year} Enterprise ERP"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "create": "Create",
+    "delete": "Delete",
+    "edit": "Edit",
+    "refresh": "Refresh",
+    "search": "Search...",
+    "loading": "Loading…",
+    "empty": "Nothing to show here yet.",
+    "yes": "Yes",
+    "no": "No",
+    "name": "Name",
+    "description": "Description",
+    "email": "Email",
+    "password": "Password",
+    "actions": "Actions",
+    "system": "system",
+    "dash": "—",
+    "verify": "Verify",
+    "assign": "Assign",
+    "placeholders": {
+      "date": "YYYY-MM-DD",
+      "dateTime": "YYYY-MM-DD HH:mm",
+      "selectOne": "Select one…"
+    }
+  },
+  "locale": {
+    "label": "Language",
+    "english": "English",
+    "khmer": "ខ្មែរ"
+  },
+  "theme": {
+    "toggle": "Toggle dark mode",
+    "dark": "Dark",
+    "light": "Light"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "roles": "Roles",
+    "permissions": "Permissions",
+    "sso": "Single Sign-On",
+    "auditLogs": "Audit Logs",
+    "branding": "Branding",
+    "employees": "Employees",
+    "departments": "Departments",
+    "positions": "Positions",
+    "leave": "Leave",
+    "payroll": "Payroll",
+    "recruitment": "Recruitment",
+    "performance": "Performance",
+    "suggestions": "Suggestions",
+    "groups": {
+      "iam": "Identity & Access",
+      "hrm": "Human Resources"
+    },
+    "expand": "Expand sidebar",
+    "collapse": "Collapse sidebar"
+  },
+  "user": {
+    "menu": "User menu",
+    "mfa": "Two-Factor Auth",
+    "signOut": "Sign out",
+    "signedOut": "Signed out"
+  },
+  "auth": {
+    "login": {
+      "title": "Sign in to your workspace",
+      "noWorkspace": "No workspace yet?",
+      "createOne": "Create one",
+      "workspaceHandle": "Workspace handle",
+      "workspacePlaceholder": "acme",
+      "emailPlaceholder": "you{'@'}example.com",
+      "signIn": "Sign in",
+      "useDemo": "Use demo credentials",
+      "welcomeBack": "Welcome back",
+      "failed": "Sign in failed",
+      "failedDetail": "Invalid credentials or unknown tenant.",
+      "errors": {
+        "tenantRequired": "Tenant handle is required",
+        "emailInvalid": "Enter a valid email",
+        "passwordRequired": "Password is required"
+      }
+    },
+    "onboard": {
+      "title": "Create your workspace",
+      "haveAccount": "Already have a workspace?",
+      "signInLink": "Sign in",
+      "companyName": "Company name",
+      "companyPlaceholder": "Acme Corp",
+      "workspaceHandle": "Workspace handle",
+      "handleHelp": "Used as the tenant identifier in the {header} header.",
+      "create": "Create workspace",
+      "tenantCreated": "Tenant created",
+      "seedHint": "Run \"php artisan tenants:seed --tenants={handle}\" then sign in.",
+      "failed": "Onboarding failed",
+      "failedDetail": "Unable to create tenant — handle may already be in use.",
+      "errors": {
+        "nameRequired": "Company name is required",
+        "handleMin": "Handle must be at least 2 characters",
+        "handlePattern": "Use lowercase letters, digits, and dashes only"
+      }
+    },
+    "mfa": {
+      "title": "Two-Factor Authentication",
+      "subtitle": "Strengthen your account with a time-based one-time password.",
+      "step1Title": "Step 1 — Scan with your authenticator",
+      "step1Body": "Generates a fresh TOTP secret on the server ({endpoint}) and shows the QR code for Google Authenticator, 1Password, Authy, etc.",
+      "qrAlt": "TOTP QR code",
+      "manualEntry": "Or enter manually",
+      "secretStored": "Secret stored",
+      "secretGenerated": "Secret generated",
+      "secretGeneratedDetail": "Scan the QR with your authenticator app.",
+      "start": "Start MFA setup",
+      "step2Title": "Step 2 — Enter the 6-digit code",
+      "verifyEnable": "Verify and enable",
+      "enabled": "MFA enabled",
+      "verifyFailed": "Verification failed",
+      "setupFailed": "MFA setup failed",
+      "errors": {
+        "codeLength": "Code must be 6 digits",
+        "codeDigits": "Digits only"
+      }
+    }
+  },
+  "dashboard": {
+    "welcome": "Welcome, {name}",
+    "signedInAs": "You are signed in to tenant {tenant}.",
+    "stats": {
+      "roles": "Roles",
+      "permissions": "Permissions",
+      "auditEntries": "Audit entries"
+    },
+    "quickStart": "Quick start",
+    "steps": {
+      "defineRoles": "Define roles under {link}.",
+      "reviewPerms": "Review the permission catalog under {link}.",
+      "trackActivity": "Track activity in {link}.",
+      "customizeBrand": "Customize tenant theme in {link}."
+    }
+  },
+  "roles": {
+    "title": "Roles",
+    "subtitle": "Define which capabilities each role grants within this tenant.",
+    "new": "New role",
+    "empty": "No roles yet. Create your first one above.",
+    "permissions": "Permissions",
+    "assigned": "{count} assigned",
+    "inheritsFrom": "Inherits from",
+    "noParent": "No parent (root role)",
+    "parentHelp": "Child roles automatically grant every permission of their parent (recursively). Cycles are blocked by the server.",
+    "inheritedNoticeOne": "Inherits {count} permission from {parent}. Those are granted automatically and cannot be unchecked here.",
+    "inheritedNoticeOther": "Inherits {count} permissions from {parent}. Those are granted automatically and cannot be unchecked here.",
+    "inheritedBadge": "inherited",
+    "dialog": {
+      "createTitle": "New role",
+      "editTitle": "Edit role",
+      "permsTitle": "Permissions — {name}",
+      "saveAssignments": "Save assignments",
+      "emptyCatalog": "No permissions in the catalog. Run {cmd}."
+    },
+    "toast": {
+      "created": "Role created",
+      "updated": "Role updated",
+      "deleted": "Role deleted",
+      "synced": "Permissions synced",
+      "saveFailed": "Save failed",
+      "deleteFailed": "Delete failed",
+      "syncFailed": "Sync failed"
+    },
+    "confirmDelete": "Delete role \"{name}\"? This cannot be undone.",
+    "confirmHeader": "Confirm deletion",
+    "errors": {
+      "nameRequired": "Name is required"
+    }
+  },
+  "permissions": {
+    "title": "Permission catalog",
+    "subtitle": "Permissions follow the {pattern} pattern. Assign them to roles under {link}.",
+    "searchPlaceholder": "Search permissions...",
+    "emptySeed": "No permissions seeded yet. Run {cmd} on the backend.",
+    "countOne": "{count} permission",
+    "countOther": "{count} permissions"
+  },
+  "branding": {
+    "title": "Branding",
+    "subtitle": "Customize your workspace logo and color scheme.",
+    "logoPath": "Logo path",
+    "logoPlaceholder": "branding/acme-logo.png",
+    "logoHelp": "Relative path inside the tenant storage disk.",
+    "primaryColor": "Primary color",
+    "secondaryColor": "Secondary color",
+    "preview": "Preview",
+    "previewPrimary": "Primary brand",
+    "previewSecondary": "Secondary accent",
+    "saveBranding": "Save branding",
+    "saved": "Branding saved",
+    "saveFailed": "Save failed",
+    "saveFailedDetail": "Could not save branding — check the server logs.",
+    "errors": {
+      "hexInvalid": "Enter a hex color"
+    }
+  },
+  "sso": {
+    "title": "Single Sign-On",
+    "subtitle": "Configure OpenID Connect or SAML identity providers for this tenant. SAML protocol handling lands in a follow-up; OIDC is wired end-to-end.",
+    "add": "Add provider",
+    "empty": "No providers configured yet.",
+    "columns": {
+      "name": "Name",
+      "protocol": "Protocol",
+      "issuer": "Issuer",
+      "active": "Active"
+    },
+    "status": {
+      "enabled": "enabled",
+      "disabled": "disabled"
+    },
+    "dialog": {
+      "addTitle": "Add SSO provider",
+      "editTitle": "Edit {name}"
+    },
+    "fields": {
+      "displayName": "Display name",
+      "protocol": "Protocol",
+      "issuer": "Issuer",
+      "clientId": "Client ID",
+      "clientSecret": "Client secret",
+      "clientSecretKeep": "(leave blank to keep current)",
+      "discoveryUrl": "Discovery URL",
+      "redirectUri": "Redirect URI",
+      "scopes": "Scopes (comma-separated)",
+      "active": "Active"
+    },
+    "protocols": {
+      "oidc": "OpenID Connect",
+      "saml": "SAML 2.0"
+    },
+    "toast": {
+      "created": "Provider created",
+      "updated": "Provider updated",
+      "removed": "Provider removed",
+      "saveFailed": "Save failed"
+    },
+    "confirmDelete": "Remove SSO provider \"{name}\"? Users linked via this provider can no longer sign in through it.",
+    "confirmHeader": "Confirm removal"
+  },
+  "audit": {
+    "title": "Audit Logs",
+    "subtitle": "Immutable history of every auditable model change. Latest {total} entries.",
+    "empty": "No audit entries yet. Critical actions on roles & permissions will appear here.",
+    "columns": {
+      "when": "When",
+      "action": "Action",
+      "entity": "Entity",
+      "actor": "Actor"
+    },
+    "detailTitle": "Audit entry",
+    "oldValues": "Old values",
+    "newValues": "New values"
+  },
+  "hrm": {
+    "common": {
+      "code": "Code",
+      "title": "Title",
+      "status": "Status",
+      "active": "Active",
+      "inactive": "Inactive",
+      "department": "Department",
+      "position": "Position",
+      "manager": "Manager",
+      "saveFailed": "Save failed",
+      "deleteFailed": "Delete failed",
+      "confirmDelete": "Delete \"{name}\"? This cannot be undone.",
+      "confirmHeader": "Confirm deletion",
+      "search": "Search by name, code, or email",
+      "perPage": "{count} per page",
+      "noResults": "No results match the current filters."
+    },
+    "employees": {
+      "title": "Employees",
+      "subtitle": "Workforce directory. PII is encrypted at rest; only roles with the matching permission see salary details.",
+      "new": "Add employee",
+      "manageDepts": "Manage departments",
+      "managePositions": "Manage positions",
+      "columns": {
+        "employeeId": "Employee ID",
+        "fullName": "Name",
+        "email": "Email",
+        "department": "Department",
+        "position": "Position",
+        "status": "Status",
+        "hireDate": "Hired"
+      },
+      "dialog": {
+        "createTitle": "Add employee",
+        "editTitle": "Edit {name}"
+      },
+      "fields": {
+        "employeeId": "Employee ID",
+        "employeeIdHint": "Human-readable identifier (e.g. TT-0001). Leave blank to auto-generate on convert-from-application.",
+        "firstName": "First name",
+        "lastName": "Last name",
+        "email": "Email",
+        "phone": "Phone",
+        "dateOfBirth": "Date of birth",
+        "gender": "Gender",
+        "address": "Address",
+        "city": "City",
+        "country": "Country (ISO-2)",
+        "department": "Department",
+        "position": "Position",
+        "manager": "Reports to",
+        "hireDate": "Hire date",
+        "employmentType": "Employment type",
+        "baseSalary": "Base salary",
+        "currency": "Currency",
+        "payFrequency": "Pay frequency",
+        "nationalId": "National ID",
+        "bankAccount": "Bank account",
+        "taxId": "Tax ID",
+        "piiNote": "These fields are stored encrypted via APP_KEY."
+      },
+      "sections": {
+        "compensation": "Compensation",
+        "pii": "PII",
+        "address": "Address"
+      },
+      "placeholders": {
+        "employeeId": "TT-0001",
+        "firstName": "Alice",
+        "lastName": "Smith",
+        "email": "alice{'@'}example.com",
+        "phone": "+855 12 345 678",
+        "gender": "Pick gender",
+        "department": "Pick a department",
+        "position": "Pick a position",
+        "employmentType": "Pick a type",
+        "baseSalary": "0.00",
+        "currency": "USD",
+        "payFrequency": "Pick a frequency",
+        "nationalId": "National ID (encrypted)",
+        "bankAccount": "Bank account (encrypted)",
+        "taxId": "Tax ID (encrypted)",
+        "address": "Street, building, etc.",
+        "city": "City",
+        "country": "KH",
+        "terminationReason": "Optional — reason for termination"
+      },
+      "employmentTypes": {
+        "full_time": "Full-time",
+        "part_time": "Part-time",
+        "contract": "Contract",
+        "intern": "Intern"
+      },
+      "genders": {
+        "male": "Male",
+        "female": "Female",
+        "other": "Other",
+        "prefer_not_to_say": "Prefer not to say"
+      },
+      "payFrequencies": {
+        "weekly": "Weekly",
+        "biweekly": "Bi-weekly",
+        "monthly": "Monthly"
+      },
+      "actions": {
+        "terminate": "Terminate",
+        "restore": "Restore",
+        "view": "View profile"
+      },
+      "terminate": {
+        "title": "Terminate {name}",
+        "reason": "Reason",
+        "effectiveAt": "Effective date",
+        "confirm": "Terminate employee",
+        "success": "Employee terminated",
+        "failed": "Termination failed"
+      },
+      "toast": {
+        "created": "Employee created",
+        "updated": "Employee updated",
+        "restored": "Employee restored"
+      }
+    },
+    "departments": {
+      "title": "Departments",
+      "subtitle": "Org structure. Departments can nest (parent → child) and assign a managing employee.",
+      "new": "New department",
+      "empty": "No departments yet. Add one to start placing employees.",
+      "fields": {
+        "name": "Name",
+        "code": "Code",
+        "parent": "Parent department",
+        "manager": "Manager",
+        "description": "Description",
+        "isActive": "Active"
+      },
+      "placeholders": {
+        "name": "e.g. Engineering",
+        "code": "ENG",
+        "parent": "No parent (top-level)",
+        "description": "Short description of the department"
+      },
+      "toast": {
+        "created": "Department created",
+        "updated": "Department updated",
+        "deleted": "Department deleted"
+      }
+    },
+    "positions": {
+      "title": "Positions",
+      "subtitle": "Job titles and salary bands. Used by recruitment and onboarding.",
+      "new": "New position",
+      "empty": "No positions yet.",
+      "fields": {
+        "title": "Title",
+        "code": "Code",
+        "department": "Department",
+        "minSalary": "Min salary",
+        "maxSalary": "Max salary",
+        "isActive": "Active"
+      },
+      "placeholders": {
+        "title": "e.g. Senior Software Engineer",
+        "code": "SSE",
+        "department": "Pick a department",
+        "minSalary": "0",
+        "maxSalary": "0"
+      },
+      "toast": {
+        "created": "Position created",
+        "updated": "Position updated",
+        "deleted": "Position deleted"
+      }
+    },
+    "leave": {
+      "title": "Leave",
+      "subtitle": "Requests, approvals, and the leave-type catalog.",
+      "tabs": {
+        "requests": "Requests",
+        "types": "Leave types"
+      },
+      "newRequest": "New request",
+      "newType": "New leave type",
+      "requests": {
+        "empty": "No requests match the filters.",
+        "columns": {
+          "employee": "Employee",
+          "type": "Type",
+          "dates": "Dates",
+          "days": "Days",
+          "status": "Status",
+          "reason": "Reason"
+        }
+      },
+      "types": {
+        "empty": "No leave types yet. Default Annual/Sick/Unpaid are seeded on tenant create.",
+        "fields": {
+          "name": "Name",
+          "code": "Code",
+          "defaultBalance": "Default balance (days)",
+          "isPaid": "Paid",
+          "accrues": "Accrues",
+          "requiresApproval": "Requires approval",
+          "color": "Color"
+        }
+      },
+      "filters": {
+        "status": "Status",
+        "anyStatus": "Any status",
+        "from": "From",
+        "to": "To"
+      },
+      "placeholders": {
+        "employee": "Pick an employee",
+        "type": "Pick a leave type",
+        "days": "Auto-calculated",
+        "reason": "Reason (optional)",
+        "rejectReason": "Why is this being rejected?",
+        "typeName": "e.g. Annual Leave",
+        "typeCode": "ANNUAL",
+        "defaultBalance": "18",
+        "color": "emerald"
+      },
+      "form": {
+        "employee": "Employee",
+        "type": "Leave type",
+        "startDate": "Start date",
+        "endDate": "End date",
+        "days": "Days",
+        "daysHint": "Leave blank to auto-calculate from the date range.",
+        "reason": "Reason"
+      },
+      "actions": {
+        "approve": "Approve",
+        "reject": "Reject",
+        "rejectReason": "Rejection reason"
+      },
+      "toast": {
+        "submitted": "Leave request submitted",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "typeCreated": "Leave type created",
+        "typeUpdated": "Leave type updated",
+        "typeDeleted": "Leave type deleted"
+      }
+    },
+    "payroll": {
+      "title": "Payroll",
+      "subtitle": "Pay periods, components, and generated payslips.",
+      "tabs": {
+        "periods": "Periods",
+        "components": "Pay components",
+        "payslips": "Payslips"
+      },
+      "newPeriod": "New period",
+      "newComponent": "New component",
+      "placeholders": {
+        "compName": "e.g. Income Tax",
+        "compCode": "INCOMETAX",
+        "kind": "Earning or deduction?",
+        "calculation": "Fixed or % of base?",
+        "amount": "0.00",
+        "periodLabel": "May 2026"
+      },
+      "components": {
+        "empty": "No pay components configured. Add the tenant's tax and allowance rules first.",
+        "columns": {
+          "name": "Name",
+          "code": "Code",
+          "kind": "Kind",
+          "calculation": "Calculation",
+          "amount": "Amount",
+          "active": "Active"
+        },
+        "kinds": {
+          "earning": "Earning",
+          "deduction": "Deduction"
+        },
+        "calculations": {
+          "fixed": "Fixed",
+          "percentage_of_base": "% of base"
+        },
+        "fields": {
+          "name": "Name",
+          "code": "Code",
+          "kind": "Kind",
+          "calculation": "Calculation",
+          "amount": "Amount or %",
+          "isTaxable": "Taxable",
+          "isActive": "Active"
+        }
+      },
+      "periods": {
+        "empty": "No payroll periods yet. Create one to run the engine.",
+        "columns": {
+          "label": "Label",
+          "startDate": "Start",
+          "endDate": "End",
+          "status": "Status",
+          "processedAt": "Processed"
+        },
+        "process": "Run payroll",
+        "processConfirm": "Run payroll for {label}? This will compute a payslip for every active employee.",
+        "fields": {
+          "startDate": "Start date",
+          "endDate": "End date",
+          "label": "Label"
+        }
+      },
+      "payslips": {
+        "empty": "No payslips generated yet. Run payroll on a period first.",
+        "columns": {
+          "employee": "Employee",
+          "period": "Period",
+          "gross": "Gross",
+          "deductions": "Deductions",
+          "net": "Net pay"
+        },
+        "detailTitle": "Payslip — {employee}"
+      },
+      "toast": {
+        "componentCreated": "Component created",
+        "componentUpdated": "Component updated",
+        "componentDeleted": "Component deleted",
+        "periodCreated": "Period created",
+        "periodProcessed": "Payroll processed"
+      }
+    },
+    "recruitment": {
+      "title": "Recruitment",
+      "subtitle": "Vacancies, applications, and interview tracking.",
+      "tabs": {
+        "vacancies": "Vacancies",
+        "applications": "Applications",
+        "interviews": "Interviews"
+      },
+      "placeholders": {
+        "vacancyTitle": "e.g. Senior Backend Engineer",
+        "reference": "VAC-2026-0001",
+        "department": "Pick a department",
+        "position": "Pick a position",
+        "description": "Role overview",
+        "requirements": "Required skills and experience",
+        "location": "Remote / Phnom Penh / …",
+        "salaryMin": "0",
+        "salaryMax": "0",
+        "employmentType": "Pick a type",
+        "status": "Pick a status",
+        "vacancy": "Pick a vacancy",
+        "candidate": "Pick a candidate",
+        "resumePathLabel": "Resume path",
+        "resumePath": "applications/2026/alice-resume.pdf",
+        "expectedSalaryLabel": "Expected salary",
+        "expectedSalary": "0",
+        "durationLabel": "Duration (minutes)",
+        "duration": "45",
+        "mode": "Virtual / on-site / phone",
+        "round": "e.g. Technical Round 1",
+        "locationLabel": "Location",
+        "locationDetail": "Meeting room or video link"
+      },
+      "vacancies": {
+        "new": "New vacancy",
+        "empty": "No vacancies yet.",
+        "columns": {
+          "reference": "Reference",
+          "title": "Title",
+          "status": "Status",
+          "applications": "Apps",
+          "opens": "Opens",
+          "closes": "Closes"
+        },
+        "fields": {
+          "title": "Title",
+          "reference": "Reference",
+          "department": "Department",
+          "position": "Position",
+          "description": "Description",
+          "requirements": "Requirements",
+          "location": "Location",
+          "salaryMin": "Salary min",
+          "salaryMax": "Salary max",
+          "employmentType": "Employment type",
+          "opensAt": "Opens at",
+          "closesAt": "Closes at",
+          "status": "Status"
+        }
+      },
+      "applications": {
+        "new": "New application",
+        "empty": "No applications match.",
+        "columns": {
+          "candidate": "Candidate",
+          "vacancy": "Vacancy",
+          "email": "Email",
+          "status": "Status",
+          "linked": "Linked",
+          "submitted": "Submitted"
+        },
+        "linkedYes": "Linked",
+        "linkedNo": "Not linked",
+        "actions": {
+          "transition": "Change status",
+          "convert": "Convert to employee",
+          "revert": "Revert conversion",
+          "bulkConvert": "Bulk convert hired"
+        },
+        "transitionPrompt": "Move {candidate} to which status?",
+        "convertConfirm": "Convert {candidate} to a workforce-registry Employee? Idempotent — re-running links to the existing match by email.",
+        "convertedExisting": "Linked to existing employee {employeeId}",
+        "convertedFresh": "Created employee {employeeId}",
+        "revertConfirm": "Revert this conversion? Within 7 days of {convertedAt}, the linked employee is soft-deleted and the employee_id is released. Use the standard offboarding flow after that window.",
+        "bulkConvertHeader": "Bulk convert",
+        "bulkConvertBody": "{count} hired-and-unlinked applications selected. Converted rows link to the new employee; rows that fail are listed below.",
+        "bulkResult": "{converted} converted · {linked} already linked · {ineligible} not hired · {missing} missing · {errors} errors"
+      },
+      "interviews": {
+        "new": "Schedule interview",
+        "empty": "No interviews scheduled.",
+        "columns": {
+          "candidate": "Candidate",
+          "round": "Round",
+          "scheduled": "Scheduled",
+          "mode": "Mode",
+          "status": "Status"
+        },
+        "modes": {
+          "virtual": "Virtual",
+          "onsite": "On-site",
+          "phone": "Phone"
+        },
+        "statuses": {
+          "scheduled": "Scheduled",
+          "completed": "Completed",
+          "cancelled": "Cancelled"
+        },
+        "feedback": {
+          "title": "Submit feedback",
+          "rating": "Rating",
+          "recommendation": "Recommendation",
+          "strengths": "Strengths",
+          "weaknesses": "Weaknesses",
+          "notes": "Notes",
+          "recommendations": {
+            "hire": "Hire",
+            "reject": "Reject",
+            "hold": "Hold"
+          }
+        }
+      },
+      "toast": {
+        "vacancyCreated": "Vacancy created",
+        "vacancyUpdated": "Vacancy updated",
+        "vacancyDeleted": "Vacancy deleted",
+        "applicationSubmitted": "Application submitted",
+        "applicationTransitioned": "Status updated",
+        "applicationConverted": "Application converted",
+        "applicationReverted": "Conversion reverted",
+        "interviewScheduled": "Interview scheduled",
+        "interviewUpdated": "Interview updated",
+        "feedbackSubmitted": "Feedback submitted"
+      }
+    },
+    "performance": {
+      "title": "Performance",
+      "subtitle": "Appraisal cycles and per-employee reviews.",
+      "tabs": {
+        "cycles": "Cycles",
+        "appraisals": "Appraisals"
+      },
+      "placeholders": {
+        "cycleName": "e.g. FY2026 H1 Review",
+        "ratingScale": "JSON array — each item with a numeric value and a label",
+        "cycle": "Pick a cycle",
+        "employee": "Pick an employee",
+        "reviewer": "Pick a reviewer (optional)",
+        "employeeComments": "Self-assessment, highlights, learnings…",
+        "overallScore": "0-100",
+        "managerComments": "Strengths, growth areas, decisions…"
+      },
+      "cycles": {
+        "new": "New cycle",
+        "empty": "No appraisal cycles yet.",
+        "columns": {
+          "name": "Name",
+          "start": "Starts",
+          "end": "Ends",
+          "active": "Active"
+        },
+        "fields": {
+          "name": "Name",
+          "startDate": "Start date",
+          "endDate": "End date",
+          "isActive": "Active",
+          "ratingScale": "Rating scale (JSON array of value/label pairs)"
+        }
+      },
+      "appraisals": {
+        "new": "New appraisal",
+        "empty": "No appraisals in this cycle yet.",
+        "columns": {
+          "employee": "Employee",
+          "cycle": "Cycle",
+          "status": "Status",
+          "score": "Score"
+        },
+        "fields": {
+          "cycle": "Cycle",
+          "employee": "Employee",
+          "reviewer": "Reviewer",
+          "responses": "Responses (JSON)",
+          "employeeComments": "Self-assessment",
+          "managerComments": "Manager comments",
+          "overallScore": "Overall score"
+        },
+        "actions": {
+          "submit": "Submit",
+          "review": "Mark reviewed",
+          "close": "Close"
+        }
+      },
+      "toast": {
+        "cycleCreated": "Cycle created",
+        "cycleUpdated": "Cycle updated",
+        "cycleDeleted": "Cycle deleted",
+        "appraisalCreated": "Appraisal created",
+        "appraisalSubmitted": "Appraisal submitted",
+        "appraisalReviewed": "Appraisal reviewed",
+        "appraisalClosed": "Appraisal closed"
+      }
+    },
+    "suggestions": {
+      "title": "Suggestions",
+      "subtitle": "Employee suggestion box. Anonymous submissions strip submitter identity from the response.",
+      "new": "New suggestion",
+      "empty": "No suggestions match the filters.",
+      "anonymous": "Anonymous",
+      "placeholders": {
+        "title": "Short, descriptive title",
+        "category": "Pick a category",
+        "body": "Describe your idea or concern in detail…",
+        "response": "Reply to the submitter (optional)"
+      },
+      "columns": {
+        "title": "Title",
+        "category": "Category",
+        "status": "Status",
+        "submitted": "Submitted"
+      },
+      "form": {
+        "title": "Title",
+        "body": "Body",
+        "category": "Category",
+        "isAnonymous": "Submit anonymously"
+      },
+      "statuses": {
+        "new": "New",
+        "acknowledged": "Acknowledged",
+        "actioned": "Actioned",
+        "dismissed": "Dismissed"
+      },
+      "actions": {
+        "acknowledge": "Acknowledge",
+        "action": "Mark actioned",
+        "dismiss": "Dismiss",
+        "response": "Response"
+      },
+      "toast": {
+        "submitted": "Suggestion submitted",
+        "transitioned": "Suggestion updated",
+        "deleted": "Suggestion deleted"
+      }
+    },
+    "notes": {
+      "title": "Notes & documents",
+      "subtitle": "Manager notes (with disciplinary flag) and signed documents per employee.",
+      "tabs": {
+        "notes": "Notes",
+        "documents": "Documents"
+      },
+      "placeholders": {
+        "category": "Pick a category",
+        "noteTitle": "Short label (optional)",
+        "noteBody": "What happened, what was discussed, action items…",
+        "docTitle": "e.g. Employment Contract",
+        "filePath": "employees/[id]/contracts/2026-05-21.pdf",
+        "mimeType": "application/pdf",
+        "sizeBytes": "0"
+      },
+      "notes": {
+        "new": "New note",
+        "empty": "No notes recorded for this employee.",
+        "fields": {
+          "category": "Category",
+          "title": "Title",
+          "body": "Note",
+          "isPrivate": "Private",
+          "isDisciplinary": "Disciplinary",
+          "incidentDate": "Incident date"
+        },
+        "categories": {
+          "general": "General",
+          "performance": "Performance",
+          "disciplinary": "Disciplinary",
+          "praise": "Praise"
+        }
+      },
+      "documents": {
+        "new": "Upload document",
+        "empty": "No documents uploaded.",
+        "fields": {
+          "title": "Title",
+          "category": "Category",
+          "filePath": "File path",
+          "filePathHint": "Relative path inside the tenant storage disk.",
+          "mimeType": "Mime type",
+          "sizeBytes": "Size (bytes)",
+          "issuedAt": "Issued at",
+          "expiresAt": "Expires at"
+        },
+        "categories": {
+          "contract": "Contract",
+          "id": "ID",
+          "certificate": "Certificate",
+          "other": "Other"
+        },
+        "expiringSoon": "Expiring within 30 days"
+      },
+      "toast": {
+        "noteCreated": "Note saved",
+        "noteUpdated": "Note updated",
+        "noteDeleted": "Note deleted",
+        "docCreated": "Document recorded",
+        "docDeleted": "Document deleted"
+      }
+    }
+  }
+}

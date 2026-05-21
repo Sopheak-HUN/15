@@ -1,7 +1,7 @@
 {
 	"info": {
 		"name": "Enterprise ERP Collection",
-		"description": "Multi-tenant ERP API. Tenant identification is header-based: every tenant-scoped request sends `tenant: {{tenant_id}}` (added automatically by the collection-level pre-request script). No subdomain is required — all requests hit `{{base_url}}` (default http://localhost:8000). Run requests in order from top to bottom on a clean DB: Onboard Tenant → (shell) tenants:seed → Login → IAM operations.",
+		"description": "Multi-tenant ERP API.\n\nTenant identification is header-based: every tenant-scoped request sends `tenant: {{tenant_id}}` (added automatically by the collection-level pre-request script). No subdomain required — all requests hit `{{base_url}}` (default `http://localhost:8000`).\n\nBootstrap order on a clean DB:\n1. **Onboard Tenant** (central, no tenant header) → captures `tenant_id`.\n2. (shell) `php artisan tenants:seed` — seeds permissions, super-admin user, workflow statuses, default leave types.\n3. **Login** → captures `token` and `user_id`.\n4. Any tenant-scoped request below.\n\nDefault seeded credentials: `admin@erp.local / Admin@1234!` (super-admin), `staff@erp.local / Staff@1234!` (staff).",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -10,7 +10,7 @@
 			"item": [
 				{
 					"name": "Central Routing",
-					"description": "Endpoints served by the central host (no tenant context). No `tenant` header is required for these.",
+					"description": "Endpoints served by the central host (no tenant context). No `tenant` header required — the collection-level pre-request script still sends one but the central middleware ignores it on `/api/tenants`.",
 					"item": [
 						{
 							"name": "Onboard Tenant",
@@ -42,14 +42,14 @@
 									"host": ["{{base_url}}"],
 									"path": ["api", "tenants"]
 								},
-								"description": "Creates a new tenant record + tenant database (CreateDatabase + MigrateDatabase pipeline runs synchronously). You MUST then run `php artisan tenants:seed` for that tenant before logging in."
+								"description": "Creates a tenant row + tenant database (CreateDatabase + MigrateDatabase pipeline runs synchronously). You MUST then run `php artisan tenants:seed` for that tenant before logging in."
 							}
 						}
 					]
 				},
 				{
 					"name": "Tenant API",
-					"description": "All requests below hit `{{base_url}}` and rely on the `tenant: {{tenant_id}}` header (added by the collection-level pre-request script) for tenant resolution via Stancl's InitializeTenancyByRequestData middleware.",
+					"description": "All requests below hit `{{base_url}}` and rely on the `tenant: {{tenant_id}}` header (added by the collection-level pre-request script) for tenant resolution via Stancl's `InitializeTenancyByRequestData` middleware.",
 					"item": [
 						{
 							"name": "Authentication",
@@ -85,7 +85,7 @@
 											"host": ["{{base_url}}"],
 											"path": ["api", "auth", "login"]
 										},
-										"description": "Authenticates against the tenant's user table and issues a Passport personal-access token. Default seeded credentials: `admin@erp.local / Admin@1234!` (super-admin), `staff@erp.local / Staff@1234!` (staff)."
+										"description": "Authenticates against the tenant's user table and issues a Passport personal-access token."
 									}
 								},
 								{
@@ -103,6 +103,23 @@
 								},
 								{
 									"name": "Setup MFA",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"type": "text/javascript",
+												"exec": [
+													"pm.test('MFA secret returned', function () {",
+													"    pm.response.to.have.status(200);",
+													"    const json = pm.response.json();",
+													"    pm.expect(json.data.secret).to.be.a('string');",
+													"    pm.expect(json.data.provisioning_uri).to.match(/^otpauth:\\/\\/totp\\//);",
+													"    pm.environment.set('mfa_secret', json.data.secret);",
+													"});"
+												]
+											}
+										}
+									],
 									"request": {
 										"method": "POST",
 										"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
@@ -111,7 +128,7 @@
 											"host": ["{{base_url}}"],
 											"path": ["api", "auth", "mfa", "setup"]
 										},
-										"description": "⚠️ Stub. Returns a hardcoded success message; TOTP generation is not yet implemented (AuthController::setupMfa)."
+										"description": "Generates an RFC 6238 TOTP secret on the user and returns the `otpauth://` provisioning URI. `mfa_enabled` stays false until `Verify MFA` succeeds. Test script captures the base32 secret into `{{mfa_secret}}`."
 									}
 								},
 								{
@@ -131,7 +148,7 @@
 											"host": ["{{base_url}}"],
 											"path": ["api", "auth", "mfa", "verify"]
 										},
-										"description": "⚠️ Stub. Returns a hardcoded success message; TOTP verification is not yet implemented."
+										"description": "Validates the 6-digit code against the stored secret (±1 time-step window). On first success, sets `mfa_enabled = true`."
 									}
 								}
 							]
@@ -166,7 +183,20 @@
 											"host": ["{{base_url}}"],
 											"path": ["api", "iam", "roles"]
 										},
-										"description": "Lists all tenant roles with their permissions. Captures the first role's UUID into `{{role_id}}` for downstream requests."
+										"description": "Lists tenant roles eager-loaded with permissions and parent role. Captures the first role's UUID into `{{role_id}}`."
+									}
+								},
+								{
+									"name": "Show Role (with effective permissions)",
+									"request": {
+										"method": "GET",
+										"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+										"url": {
+											"raw": "{{base_url}}/api/iam/roles/{{role_id}}",
+											"host": ["{{base_url}}"],
+											"path": ["api", "iam", "roles", "{{role_id}}"]
+										},
+										"description": "Returns the role plus `effective_permissions` (walked through the parent chain, cycle-safe)."
 									}
 								},
 								{
@@ -195,13 +225,14 @@
 										],
 										"body": {
 											"mode": "raw",
-											"raw": "{\n    \"name\": \"Manager\",\n    \"description\": \"System Manager\"\n}"
+											"raw": "{\n    \"name\": \"Manager\",\n    \"description\": \"Department manager\",\n    \"parent_role_id\": null\n}"
 										},
 										"url": {
 											"raw": "{{base_url}}/api/iam/roles",
 											"host": ["{{base_url}}"],
 											"path": ["api", "iam", "roles"]
-										}
+										},
+										"description": "`parent_role_id` is optional. Set to another role UUID to inherit its permissions (self-reference and cycles are rejected with 422)."
 									}
 								},
 								{
@@ -214,7 +245,7 @@
 										],
 										"body": {
 											"mode": "raw",
-											"raw": "{\n    \"name\": \"Senior Manager\",\n    \"description\": \"Updated description\"\n}"
+											"raw": "{\n    \"name\": \"Senior Manager\",\n    \"description\": \"Updated description\",\n    \"parent_role_id\": null\n}"
 										},
 										"url": {
 											"raw": "{{base_url}}/api/iam/roles/{{role_id}}",
@@ -262,7 +293,7 @@
 											"host": ["{{base_url}}"],
 											"path": ["api", "iam", "permissions"]
 										},
-										"description": "Lists all permissions seeded for the tenant. Captures the first three permission UUIDs into `{{permission_ids}}` as a JSON array string for use by `Sync Role Permissions`."
+										"description": "Lists the tenant's permission catalog (IAM + HRM bundles seeded by `tenants:seed`). Captures the first three UUIDs into `{{permission_ids}}` for `Sync Role Permissions`."
 									}
 								},
 								{
@@ -274,11 +305,7 @@
 												"type": "text/javascript",
 												"exec": [
 													"const ids = pm.environment.get('permission_ids');",
-													"if (ids) {",
-													"    pm.variables.set('_permission_ids_body', ids);",
-													"} else {",
-													"    pm.variables.set('_permission_ids_body', '[]');",
-													"}"
+													"pm.variables.set('_permission_ids_body', ids || '[]');"
 												]
 											}
 										}
@@ -297,8 +324,200 @@
 											"raw": "{{base_url}}/api/iam/roles/{{role_id}}/permissions",
 											"host": ["{{base_url}}"],
 											"path": ["api", "iam", "roles", "{{role_id}}", "permissions"]
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "Workflow Statuses",
+							"description": "Tenant-scoped lifecycle status registry for every state-machine module (`hrm.application`, `hrm.leave`, `hrm.appraisal`, `hrm.vacancy`, `hrm.employee`, `hrm.payroll_period`). Seeded with defaults; admins can rename/reorder/recolor/add.",
+							"item": [
+								{
+									"name": "List Statuses",
+									"request": {
+										"method": "GET",
+										"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+										"url": {
+											"raw": "{{base_url}}/api/iam/workflow-statuses?module=hrm.leave",
+											"host": ["{{base_url}}"],
+											"path": ["api", "iam", "workflow-statuses"],
+											"query": [{"key": "module", "value": "hrm.leave"}]
 										},
-										"description": "Permission IDs are UUIDs. The pre-request script injects `{{permission_ids}}` (set by `List Permissions`) into the request body."
+										"description": "`module` query is optional — omit to get every module's statuses."
+									}
+								},
+								{
+									"name": "Create Status",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"type": "text/javascript",
+												"exec": [
+													"if (pm.response.code === 201) {",
+													"    pm.environment.set('workflow_status_id', pm.response.json().data.id);",
+													"}"
+												]
+											}
+										}
+									],
+									"request": {
+										"method": "POST",
+										"header": [
+											{"key": "Content-Type", "value": "application/json"},
+											{"key": "Authorization", "value": "Bearer {{token}}"}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"module\": \"hrm.leave\",\n    \"key\": \"on_hold\",\n    \"label\": \"On Hold\",\n    \"color\": \"amber\",\n    \"icon\": \"pi-pause\",\n    \"is_initial\": false,\n    \"is_terminal\": false,\n    \"allowed_transitions\": [\"approved\", \"rejected\"],\n    \"sort_order\": 5\n}"
+										},
+										"url": {
+											"raw": "{{base_url}}/api/iam/workflow-statuses",
+											"host": ["{{base_url}}"],
+											"path": ["api", "iam", "workflow-statuses"]
+										}
+									}
+								},
+								{
+									"name": "Update Status",
+									"request": {
+										"method": "PUT",
+										"header": [
+											{"key": "Content-Type", "value": "application/json"},
+											{"key": "Authorization", "value": "Bearer {{token}}"}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"module\": \"hrm.leave\",\n    \"key\": \"on_hold\",\n    \"label\": \"Held for Review\",\n    \"color\": \"orange\",\n    \"allowed_transitions\": [\"approved\", \"rejected\"]\n}"
+										},
+										"url": {
+											"raw": "{{base_url}}/api/iam/workflow-statuses/{{workflow_status_id}}",
+											"host": ["{{base_url}}"],
+											"path": ["api", "iam", "workflow-statuses", "{{workflow_status_id}}"]
+										}
+									}
+								},
+								{
+									"name": "Delete Status",
+									"request": {
+										"method": "DELETE",
+										"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+										"url": {
+											"raw": "{{base_url}}/api/iam/workflow-statuses/{{workflow_status_id}}",
+											"host": ["{{base_url}}"],
+											"path": ["api", "iam", "workflow-statuses", "{{workflow_status_id}}"]
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "SSO Providers",
+							"item": [
+								{
+									"name": "List Active Providers",
+									"request": {
+										"method": "GET",
+										"url": {
+											"raw": "{{base_url}}/api/auth/sso/providers",
+											"host": ["{{base_url}}"],
+											"path": ["api", "auth", "sso", "providers"]
+										},
+										"description": "Unauthenticated. Returns name + protocol of active providers for the tenant — used by the login page to render SSO buttons."
+									}
+								},
+								{
+									"name": "Create Provider (OIDC)",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"type": "text/javascript",
+												"exec": [
+													"if (pm.response.code === 200) {",
+													"    pm.environment.set('sso_provider_id', pm.response.json().data.id);",
+													"}"
+												]
+											}
+										}
+									],
+									"request": {
+										"method": "POST",
+										"header": [
+											{"key": "Content-Type", "value": "application/json"},
+											{"key": "Authorization", "value": "Bearer {{token}}"}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"name\": \"Acme Google Workspace\",\n    \"protocol\": \"oidc\",\n    \"issuer\": \"https://accounts.google.com\",\n    \"client_id\": \"123-abc.apps.googleusercontent.com\",\n    \"client_secret\": \"replace-me\",\n    \"discovery_url\": \"https://accounts.google.com/.well-known/openid-configuration\",\n    \"redirect_uri\": \"https://app.example.com/auth/sso-callback\",\n    \"scopes\": [\"openid\", \"profile\", \"email\"],\n    \"is_active\": true\n}"
+										},
+										"url": {
+											"raw": "{{base_url}}/api/iam/sso-providers",
+											"host": ["{{base_url}}"],
+											"path": ["api", "iam", "sso-providers"]
+										},
+										"description": "`client_secret` is stored encrypted (Eloquent `encrypted` cast). SAML protocol is reserved but rejected with 422 by the redirect endpoint."
+									}
+								},
+								{
+									"name": "Update Provider",
+									"request": {
+										"method": "PUT",
+										"header": [
+											{"key": "Content-Type", "value": "application/json"},
+											{"key": "Authorization", "value": "Bearer {{token}}"}
+										],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"is_active\": false\n}"
+										},
+										"url": {
+											"raw": "{{base_url}}/api/iam/sso-providers/{{sso_provider_id}}",
+											"host": ["{{base_url}}"],
+											"path": ["api", "iam", "sso-providers", "{{sso_provider_id}}"]
+										}
+									}
+								},
+								{
+									"name": "Delete Provider",
+									"request": {
+										"method": "DELETE",
+										"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+										"url": {
+											"raw": "{{base_url}}/api/iam/sso-providers/{{sso_provider_id}}",
+											"host": ["{{base_url}}"],
+											"path": ["api", "iam", "sso-providers", "{{sso_provider_id}}"]
+										}
+									}
+								},
+								{
+									"name": "Begin OIDC Login (redirect)",
+									"request": {
+										"method": "GET",
+										"url": {
+											"raw": "{{base_url}}/api/auth/sso/{{sso_provider_id}}/redirect",
+											"host": ["{{base_url}}"],
+											"path": ["api", "auth", "sso", "{{sso_provider_id}}", "redirect"]
+										},
+										"description": "Returns the IdP authorization URL. The state token is cached server-side (10 min) — your browser is then expected to redirect the user to that URL."
+									}
+								},
+								{
+									"name": "OIDC Callback (exchange code)",
+									"request": {
+										"method": "POST",
+										"header": [{"key": "Content-Type", "value": "application/json"}],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"code\": \"authorization-code-from-idp\",\n    \"state\": \"state-token-from-redirect\"\n}"
+										},
+										"url": {
+											"raw": "{{base_url}}/api/auth/sso/callback",
+											"host": ["{{base_url}}"],
+											"path": ["api", "auth", "sso", "callback"]
+										},
+										"description": "Exchanges the IdP authorization code for an ID token, resolves or JIT-provisions the local user, and returns a Passport access token."
 									}
 								}
 							]
@@ -323,7 +542,7 @@
 											"host": ["{{base_url}}"],
 											"path": ["api", "iam", "branding"]
 										},
-										"description": "⚠️ Known bug: the `tenants` table does not yet have `logo_path`/`primary_color`/`secondary_color` columns, so this endpoint will currently fail with a SQL error. Migration must be added before this works."
+										"description": "Updates tenant branding columns (`logo_path`, `primary_color`, `secondary_color`). Migration `2026_05_21_100000_add_branding_columns_to_tenants_table` must be applied."
 									}
 								}
 							]
@@ -341,10 +560,1462 @@
 											"host": ["{{base_url}}"],
 											"path": ["api", "iam", "audit-logs"]
 										},
-										"description": "Paginated (50 per page) audit entries written by the Auditable trait. Currently only attached to Role and Permission models."
+										"description": "Paginated (50 per page) audit entries written by the Auditable trait. Attached to Role, Permission, AuditLog (no-op), WorkflowStatus, SsoProvider, and all HRM models."
 									}
 								}
 							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "HRM Module",
+			"description": "Human Resource Management — Workforce, Leave, Payroll, Recruitment, Performance, Suggestions, Notes & Documents. All endpoints require the `tenant` header (set automatically) and a valid Passport token (`Login` first).",
+			"item": [
+				{
+					"name": "Departments",
+					"item": [
+						{
+							"name": "List Departments",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const rows = (pm.response.json().data && pm.response.json().data.data) || [];",
+											"    if (rows.length) pm.environment.set('department_id', rows[0].id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/departments?per_page=25",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "departments"],
+									"query": [{"key": "per_page", "value": "25"}, {"key": "q", "value": "", "disabled": true}]
+								},
+								"description": "Paginated. Filters: `q` (name/code), `include_inactive=1`."
+							}
+						},
+						{
+							"name": "Create Department",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    pm.environment.set('department_id', pm.response.json().data.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Engineering\",\n    \"code\": \"ENG\",\n    \"description\": \"Product engineering\",\n    \"is_active\": true\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/departments",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "departments"]
+								}
+							}
+						},
+						{
+							"name": "Show Department",
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/departments/{{department_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "departments", "{{department_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Update Department",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {"mode": "raw", "raw": "{\n    \"name\": \"Engineering (R&D)\"\n}"},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/departments/{{department_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "departments", "{{department_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Delete Department",
+							"request": {
+								"method": "DELETE",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/departments/{{department_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "departments", "{{department_id}}"]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Positions",
+					"item": [
+						{
+							"name": "List Positions",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const rows = (pm.response.json().data && pm.response.json().data.data) || [];",
+											"    if (rows.length) pm.environment.set('position_id', rows[0].id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/positions",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "positions"]
+								}
+							}
+						},
+						{
+							"name": "Create Position",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    pm.environment.set('position_id', pm.response.json().data.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"title\": \"Senior Software Engineer\",\n    \"code\": \"SSE\",\n    \"department_id\": \"{{department_id}}\",\n    \"min_salary\": 60000,\n    \"max_salary\": 120000,\n    \"is_active\": true\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/positions",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "positions"]
+								}
+							}
+						},
+						{
+							"name": "Update Position",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {"mode": "raw", "raw": "{\n    \"max_salary\": 140000\n}"},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/positions/{{position_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "positions", "{{position_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Delete Position",
+							"request": {
+								"method": "DELETE",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/positions/{{position_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "positions", "{{position_id}}"]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Employees",
+					"item": [
+						{
+							"name": "List Employees",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const rows = (pm.response.json().data && pm.response.json().data.data) || [];",
+											"    if (rows.length) pm.environment.set('employee_uuid', rows[0].id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/employees?per_page=25",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "employees"],
+									"query": [
+										{"key": "per_page", "value": "25"},
+										{"key": "q", "value": "", "disabled": true},
+										{"key": "department_id", "value": "", "disabled": true},
+										{"key": "status", "value": "active", "disabled": true}
+									]
+								},
+								"description": "Sensitive PII (`national_id`, `bank_account`, `tax_id`) and `base_salary` are hidden on the model's `$hidden` array and never serialized — but they ARE returned encrypted in the DB. Salaries are encrypted at rest using `APP_KEY`."
+							}
+						},
+						{
+							"name": "Create Employee",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    pm.environment.set('employee_uuid', pm.response.json().data.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"employee_id\": \"TT-0001\",\n    \"first_name\": \"Alice\",\n    \"last_name\": \"Example\",\n    \"email\": \"alice@acme.local\",\n    \"phone\": \"+1-555-0100\",\n    \"date_of_birth\": \"1990-06-15\",\n    \"gender\": \"female\",\n    \"national_id\": \"NID-XXX-12345\",\n    \"bank_account\": \"ACC-9988776655\",\n    \"tax_id\": \"TAX-AB1234\",\n    \"address\": \"1 Demo Street\",\n    \"city\": \"Phnom Penh\",\n    \"country\": \"KH\",\n    \"department_id\": \"{{department_id}}\",\n    \"position_id\": \"{{position_id}}\",\n    \"hire_date\": \"2026-05-21\",\n    \"employment_type\": \"full_time\",\n    \"base_salary\": 5000,\n    \"currency\": \"USD\",\n    \"pay_frequency\": \"monthly\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/employees",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "employees"]
+								},
+								"description": "`employee_id` is the human-readable identifier (`TT-NNNN`). Auto-generated by `RecruitmentService::generateNextEmployeeId()` when created via the application convert flow."
+							}
+						},
+						{
+							"name": "Show Employee",
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/employees/{{employee_uuid}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "employees", "{{employee_uuid}}"]
+								}
+							}
+						},
+						{
+							"name": "Update Employee",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {"mode": "raw", "raw": "{\n    \"phone\": \"+1-555-0101\",\n    \"city\": \"Siem Reap\"\n}"},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/employees/{{employee_uuid}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "employees", "{{employee_uuid}}"]
+								}
+							}
+						},
+						{
+							"name": "Terminate Employee",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {"mode": "raw", "raw": "{\n    \"reason\": \"Voluntary resignation\",\n    \"effective_at\": \"2026-06-30\"\n}"},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/employees/{{employee_uuid}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "employees", "{{employee_uuid}}"]
+								},
+								"description": "Validates the `hrm.employee` workflow transition to `terminated`, stamps `termination_date`, and soft-deletes (releases the email from the partial unique index)."
+							}
+						},
+						{
+							"name": "Restore Employee",
+							"request": {
+								"method": "POST",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/employees/{{employee_uuid}}/restore",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "employees", "{{employee_uuid}}", "restore"]
+								},
+								"description": "Reactivates a soft-deleted employee. 422 if the row isn't trashed."
+							}
+						}
+					]
+				},
+				{
+					"name": "Leave",
+					"item": [
+						{
+							"name": "List Leave Types",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const rows = pm.response.json().data || [];",
+											"    const annual = rows.find(r => r.code === 'ANNUAL') || rows[0];",
+											"    if (annual) pm.environment.set('leave_type_id', annual.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/leave-types",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "leave-types"]
+								}
+							}
+						},
+						{
+							"name": "Create Leave Type",
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Bereavement\",\n    \"code\": \"BEREAVE\",\n    \"default_balance\": 5,\n    \"is_paid\": true,\n    \"accrues\": false,\n    \"requires_approval\": false,\n    \"color\": \"stone\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/leave-types",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "leave-types"]
+								}
+							}
+						},
+						{
+							"name": "Submit Leave Request",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    pm.environment.set('leave_request_id', pm.response.json().data.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"employee_id\": \"{{employee_uuid}}\",\n    \"leave_type_id\": \"{{leave_type_id}}\",\n    \"start_date\": \"2026-07-01\",\n    \"end_date\": \"2026-07-05\",\n    \"reason\": \"Family vacation\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/leave-requests",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "leave-requests"]
+								},
+								"description": "Locks the corresponding `leave_balances` row (`FOR UPDATE`) and rejects with 422 if available balance is insufficient. `days` is auto-calculated from the date range when omitted."
+							}
+						},
+						{
+							"name": "List Leave Requests",
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/leave-requests?per_page=25",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "leave-requests"],
+									"query": [
+										{"key": "per_page", "value": "25"},
+										{"key": "status", "value": "pending", "disabled": true},
+										{"key": "employee_id", "value": "", "disabled": true},
+										{"key": "from", "value": "2026-01-01", "disabled": true},
+										{"key": "to", "value": "2026-12-31", "disabled": true}
+									]
+								}
+							}
+						},
+						{
+							"name": "Show Leave Request",
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/leave-requests/{{leave_request_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "leave-requests", "{{leave_request_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Approve Leave Request",
+							"request": {
+								"method": "POST",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/leave-requests/{{leave_request_id}}/approve",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "leave-requests", "{{leave_request_id}}", "approve"]
+								},
+								"description": "Caller must have a linked Employee row (`employees.user_id = caller.user_id`). Decrements `pending`, increments `used`. 422 if caller is not linked."
+							}
+						},
+						{
+							"name": "Reject Leave Request",
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {"mode": "raw", "raw": "{\n    \"reason\": \"Conflicts with project deadline\"\n}"},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/leave-requests/{{leave_request_id}}/reject",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "leave-requests", "{{leave_request_id}}", "reject"]
+								}
+							}
+						},
+						{
+							"name": "Employee Leave Balances",
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/employees/{{employee_uuid}}/leave-balances",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "employees", "{{employee_uuid}}", "leave-balances"]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Payroll",
+					"item": [
+						{
+							"name": "List Pay Components",
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/pay-components",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "pay-components"]
+								}
+							}
+						},
+						{
+							"name": "Create Pay Component (Tax)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    pm.environment.set('pay_component_id', pm.response.json().data.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Income Tax (Cambodia, bracket 1)\",\n    \"code\": \"INCOMETAX\",\n    \"kind\": \"deduction\",\n    \"calculation\": \"percentage_of_base\",\n    \"amount\": 5,\n    \"is_taxable\": false,\n    \"is_active\": true\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/pay-components",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "pay-components"]
+								}
+							}
+						},
+						{
+							"name": "Create Payroll Period",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    pm.environment.set('payroll_period_id', pm.response.json().data.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"start_date\": \"2026-05-01\",\n    \"end_date\": \"2026-05-31\",\n    \"label\": \"May 2026\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/payroll-periods",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "payroll-periods"]
+								}
+							}
+						},
+						{
+							"name": "List Payroll Periods",
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/payroll-periods",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "payroll-periods"]
+								}
+							}
+						},
+						{
+							"name": "Show Payroll Period",
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/payroll-periods/{{payroll_period_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "payroll-periods", "{{payroll_period_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Process Payroll Period",
+							"request": {
+								"method": "POST",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/payroll-periods/{{payroll_period_id}}/process",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "payroll-periods", "{{payroll_period_id}}", "process"]
+								},
+								"description": "Idempotent. Computes a Payslip for every active employee, applying global pay components + any employee-specific overrides effective in the period. Sets period status to `closed`."
+							}
+						},
+						{
+							"name": "List Payslips",
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/payslips?per_page=50",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "payslips"],
+									"query": [
+										{"key": "per_page", "value": "50"},
+										{"key": "employee_id", "value": "{{employee_uuid}}", "disabled": true},
+										{"key": "period_id", "value": "{{payroll_period_id}}", "disabled": true}
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Recruitment",
+					"item": [
+						{
+							"name": "List Vacancies",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const rows = (pm.response.json().data && pm.response.json().data.data) || [];",
+											"    if (rows.length) pm.environment.set('vacancy_id', rows[0].id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/vacancies",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "vacancies"]
+								}
+							}
+						},
+						{
+							"name": "Create Vacancy",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    pm.environment.set('vacancy_id', pm.response.json().data.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"title\": \"Senior Backend Engineer\",\n    \"reference\": \"VAC-2026-0001\",\n    \"department_id\": \"{{department_id}}\",\n    \"position_id\": \"{{position_id}}\",\n    \"description\": \"Build the ERP backend...\",\n    \"requirements\": \"Laravel, PostgreSQL, multi-tenant experience\",\n    \"location\": \"Remote\",\n    \"salary_min\": 60000,\n    \"salary_max\": 120000,\n    \"employment_type\": \"full_time\",\n    \"opens_at\": \"2026-05-22\",\n    \"closes_at\": \"2026-06-30\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/vacancies",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "vacancies"]
+								}
+							}
+						},
+						{
+							"name": "Update Vacancy",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {"mode": "raw", "raw": "{\n    \"status\": \"open\"\n}"},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/vacancies/{{vacancy_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "vacancies", "{{vacancy_id}}"]
+								},
+								"description": "Status transitions are validated against `hrm.vacancy` workflow (draft → open → closed/filled)."
+							}
+						},
+						{
+							"name": "Delete Vacancy",
+							"request": {
+								"method": "DELETE",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/vacancies/{{vacancy_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "vacancies", "{{vacancy_id}}"]
+								}
+							}
+						},
+						{
+							"name": "List Applications",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const rows = (pm.response.json().data && pm.response.json().data.data) || [];",
+											"    if (rows.length) pm.environment.set('application_id', rows[0].id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/applications?per_page=25",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "applications"],
+									"query": [
+										{"key": "per_page", "value": "25"},
+										{"key": "status", "value": "applied", "disabled": true},
+										{"key": "vacancy_id", "value": "{{vacancy_id}}", "disabled": true}
+									]
+								}
+							}
+						},
+						{
+							"name": "Submit Application",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    pm.environment.set('application_id', pm.response.json().data.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"vacancy_id\": \"{{vacancy_id}}\",\n    \"first_name\": \"Bob\",\n    \"last_name\": \"Candidate\",\n    \"email\": \"bob@example.com\",\n    \"phone\": \"+855-12-345678\",\n    \"resume_path\": \"applications/2026/bob-resume.pdf\",\n    \"expected_salary\": 90000\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/applications",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "applications"]
+								}
+							}
+						},
+						{
+							"name": "Show Application",
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/applications/{{application_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "applications", "{{application_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Transition Application",
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {"mode": "raw", "raw": "{\n    \"status\": \"hired\"\n}"},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/applications/{{application_id}}/transition",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "applications", "{{application_id}}", "transition"]
+								},
+								"description": "Moves the application along the `hrm.application` state machine. To reach `hired` from `applied`, you may need to step through `screening` → `interview` → `offer` → `hired` depending on the configured `allowed_transitions`."
+							}
+						},
+						{
+							"name": "Convert Application to Employee",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    pm.environment.set('employee_uuid', pm.response.json().data.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/applications/{{application_id}}/convert-to-employee",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "applications", "{{application_id}}", "convert-to-employee"]
+								},
+								"description": "Application must be `hired`. Idempotent: returns the same employee on repeat. Dedupe-by-email: an active employee with the same email is linked rather than cloned (`linkedExisting: true`). Auto-issues a `TT-NNNN` employee_id."
+							}
+						},
+						{
+							"name": "Bulk Convert Applications",
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"ids\": [\"{{application_id}}\"]\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/applications/bulk-convert-to-employee",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "applications", "bulk-convert-to-employee"]
+								},
+								"description": "1–200 UUIDs. Returns `{ converted, alreadyLinked, ineligible, missing, errors }`."
+							}
+						},
+						{
+							"name": "Revert Employee Conversion",
+							"request": {
+								"method": "POST",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/applications/{{application_id}}/revert-employee-conversion",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "applications", "{{application_id}}", "revert-employee-conversion"]
+								},
+								"description": "Allowed within `RecruitmentService::REVERT_CONVERSION_WINDOW_DAYS` (= 7 days) of conversion. Renames the employee_id to `<original>-REV-<rand>` (freeing the original for re-issue) and soft-deletes."
+							}
+						},
+						{
+							"name": "Delete Application",
+							"request": {
+								"method": "DELETE",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/applications/{{application_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "applications", "{{application_id}}"]
+								}
+							}
+						},
+						{
+							"name": "List Interviews",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const rows = (pm.response.json().data && pm.response.json().data.data) || [];",
+											"    if (rows.length) pm.environment.set('interview_id', rows[0].id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/interviews?application_id={{application_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "interviews"],
+									"query": [{"key": "application_id", "value": "{{application_id}}"}]
+								}
+							}
+						},
+						{
+							"name": "Schedule Interview",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    pm.environment.set('interview_id', pm.response.json().data.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"application_id\": \"{{application_id}}\",\n    \"scheduled_at\": \"2026-06-15T10:00:00Z\",\n    \"duration_minutes\": 45,\n    \"mode\": \"virtual\",\n    \"round_label\": \"Technical Round 1\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/interviews",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "interviews"]
+								}
+							}
+						},
+						{
+							"name": "Update Interview",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {"mode": "raw", "raw": "{\n    \"status\": \"completed\"\n}"},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/interviews/{{interview_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "interviews", "{{interview_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Submit Interview Feedback",
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"rating\": 4,\n    \"recommendation\": \"hire\",\n    \"strengths\": \"Strong Laravel fundamentals.\",\n    \"weaknesses\": \"Limited Postgres tuning experience.\",\n    \"notes\": \"Recommend for offer.\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/interviews/{{interview_id}}/feedbacks",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "interviews", "{{interview_id}}", "feedbacks"]
+								}
+							}
+						},
+						{
+							"name": "Delete Interview",
+							"request": {
+								"method": "DELETE",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/interviews/{{interview_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "interviews", "{{interview_id}}"]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Performance",
+					"item": [
+						{
+							"name": "List Appraisal Cycles",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const rows = pm.response.json().data || [];",
+											"    if (rows.length) pm.environment.set('appraisal_cycle_id', rows[0].id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/appraisal-cycles",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "appraisal-cycles"]
+								}
+							}
+						},
+						{
+							"name": "Create Appraisal Cycle",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    pm.environment.set('appraisal_cycle_id', pm.response.json().data.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"FY2026 H1 Review\",\n    \"start_date\": \"2026-01-01\",\n    \"end_date\": \"2026-06-30\",\n    \"rating_scale\": [\n        {\"value\": 1, \"label\": \"Below expectations\"},\n        {\"value\": 2, \"label\": \"Meets expectations\"},\n        {\"value\": 3, \"label\": \"Exceeds expectations\"}\n    ],\n    \"is_active\": true\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/appraisal-cycles",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "appraisal-cycles"]
+								}
+							}
+						},
+						{
+							"name": "Create Appraisal",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    pm.environment.set('appraisal_id', pm.response.json().data.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"cycle_id\": \"{{appraisal_cycle_id}}\",\n    \"employee_id\": \"{{employee_uuid}}\",\n    \"reviewer_id\": null,\n    \"responses\": {\n        \"goals_achieved\": \"Shipped IAM module ahead of schedule.\",\n        \"areas_for_growth\": \"Improve frontend coverage.\"\n    },\n    \"employee_comments\": \"Excited for H2.\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/appraisals",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "appraisals"]
+								}
+							}
+						},
+						{
+							"name": "List Appraisals",
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/appraisals?cycle_id={{appraisal_cycle_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "appraisals"],
+									"query": [{"key": "cycle_id", "value": "{{appraisal_cycle_id}}"}]
+								}
+							}
+						},
+						{
+							"name": "Show Appraisal",
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/appraisals/{{appraisal_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "appraisals", "{{appraisal_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Submit Appraisal",
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {"mode": "raw", "raw": "{\n    \"responses\": {\n        \"final_self_assessment\": \"Strong half.\"\n    }\n}"},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/appraisals/{{appraisal_id}}/submit",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "appraisals", "{{appraisal_id}}", "submit"]
+								}
+							}
+						},
+						{
+							"name": "Review Appraisal",
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {"mode": "raw", "raw": "{\n    \"manager_comments\": \"Meets all goals. Recommend promotion review.\",\n    \"overall_score\": 87\n}"},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/appraisals/{{appraisal_id}}/review",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "appraisals", "{{appraisal_id}}", "review"]
+								}
+							}
+						},
+						{
+							"name": "Close Appraisal",
+							"request": {
+								"method": "POST",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/appraisals/{{appraisal_id}}/close",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "appraisals", "{{appraisal_id}}", "close"]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Suggestions",
+					"item": [
+						{
+							"name": "List Suggestions",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const rows = (pm.response.json().data && pm.response.json().data.data) || [];",
+											"    if (rows.length) pm.environment.set('suggestion_id', rows[0].id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/suggestions?status=new",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "suggestions"],
+									"query": [
+										{"key": "status", "value": "new"},
+										{"key": "category", "value": "general", "disabled": true}
+									]
+								}
+							}
+						},
+						{
+							"name": "Submit Suggestion (Anonymous)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    pm.environment.set('suggestion_id', pm.response.json().data.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"title\": \"Offer 4-day work week pilot\",\n    \"body\": \"Several teams could trial a 4-day work week for a quarter to measure productivity impact.\",\n    \"category\": \"idea\",\n    \"is_anonymous\": true\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/suggestions",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "suggestions"]
+								},
+								"description": "When `is_anonymous = true`, the response strips `employee_id` and the submitter relationship — admins can't derive identity from the JSON."
+							}
+						},
+						{
+							"name": "Show Suggestion",
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/suggestions/{{suggestion_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "suggestions", "{{suggestion_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Transition Suggestion (Acknowledge)",
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {"mode": "raw", "raw": "{\n    \"action\": \"acknowledge\",\n    \"response\": \"Thanks — routing to the People Ops team.\"\n}"},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/suggestions/{{suggestion_id}}/transition",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "suggestions", "{{suggestion_id}}", "transition"]
+								},
+								"description": "`action` ∈ `acknowledge | action | dismiss`. State machine: new → acknowledged → actioned, with `dismiss` allowed from new or acknowledged."
+							}
+						},
+						{
+							"name": "Delete Suggestion",
+							"request": {
+								"method": "DELETE",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/suggestions/{{suggestion_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "suggestions", "{{suggestion_id}}"]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Notes & Documents",
+					"item": [
+						{
+							"name": "List Employee Notes",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const rows = (pm.response.json().data && pm.response.json().data.data) || [];",
+											"    if (rows.length) pm.environment.set('employee_note_id', rows[0].id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/employee-notes?employee_id={{employee_uuid}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "employee-notes"],
+									"query": [
+										{"key": "employee_id", "value": "{{employee_uuid}}"},
+										{"key": "category", "value": "performance", "disabled": true}
+									]
+								}
+							}
+						},
+						{
+							"name": "Create Employee Note",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    pm.environment.set('employee_note_id', pm.response.json().data.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"employee_id\": \"{{employee_uuid}}\",\n    \"category\": \"performance\",\n    \"title\": \"Q2 1:1 notes\",\n    \"body\": \"Discussed onboarding feedback and growth path.\",\n    \"is_private\": true,\n    \"is_disciplinary\": false,\n    \"incident_date\": \"2026-05-21\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/employee-notes",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "employee-notes"]
+								}
+							}
+						},
+						{
+							"name": "Show Employee Note",
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/employee-notes/{{employee_note_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "employee-notes", "{{employee_note_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Update Employee Note",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {"mode": "raw", "raw": "{\n    \"body\": \"Updated note body.\"\n}"},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/employee-notes/{{employee_note_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "employee-notes", "{{employee_note_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Delete Employee Note",
+							"request": {
+								"method": "DELETE",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/employee-notes/{{employee_note_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "employee-notes", "{{employee_note_id}}"]
+								}
+							}
+						},
+						{
+							"name": "List Employee Documents",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const rows = (pm.response.json().data && pm.response.json().data.data) || [];",
+											"    if (rows.length) pm.environment.set('employee_document_id', rows[0].id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/employee-documents?employee_id={{employee_uuid}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "employee-documents"],
+									"query": [
+										{"key": "employee_id", "value": "{{employee_uuid}}"},
+										{"key": "category", "value": "contract", "disabled": true},
+										{"key": "expiring_soon", "value": "1", "disabled": true}
+									]
+								},
+								"description": "`expiring_soon=1` filters to documents expiring within 30 days."
+							}
+						},
+						{
+							"name": "Upload Employee Document (metadata only)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    pm.environment.set('employee_document_id', pm.response.json().data.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"employee_id\": \"{{employee_uuid}}\",\n    \"title\": \"Employment Contract\",\n    \"category\": \"contract\",\n    \"file_path\": \"employees/{{employee_uuid}}/contracts/2026-05-21.pdf\",\n    \"mime_type\": \"application/pdf\",\n    \"size_bytes\": 482311,\n    \"issued_at\": \"2026-05-21\",\n    \"expires_at\": \"2027-05-20\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/employee-documents",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "employee-documents"]
+								},
+								"description": "Stores metadata only — the actual file should already be uploaded to tenant-scoped storage (`tenant_path(...)`). Add file-upload middleware separately if you want this endpoint to accept multipart bodies."
+							}
+						},
+						{
+							"name": "Show Employee Document",
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/employee-documents/{{employee_document_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "employee-documents", "{{employee_document_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Delete Employee Document",
+							"request": {
+								"method": "DELETE",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/employee-documents/{{employee_document_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "employee-documents", "{{employee_document_id}}"]
+								}
+							}
 						}
 					]
 				}
@@ -366,35 +2037,29 @@
 		}
 	],
 	"variable": [
-		{
-			"key": "base_url",
-			"value": "http://localhost:8000",
-			"type": "string"
-		},
-		{
-			"key": "tenant_id",
-			"value": "acme",
-			"type": "string"
-		},
-		{
-			"key": "token",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "user_id",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "role_id",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "permission_ids",
-			"value": "[]",
-			"type": "string"
-		}
+		{"key": "base_url", "value": "http://localhost:8000", "type": "string"},
+		{"key": "tenant_id", "value": "acme", "type": "string"},
+		{"key": "token", "value": "", "type": "string"},
+		{"key": "user_id", "value": "", "type": "string"},
+		{"key": "role_id", "value": "", "type": "string"},
+		{"key": "permission_ids", "value": "[]", "type": "string"},
+		{"key": "workflow_status_id", "value": "", "type": "string"},
+		{"key": "sso_provider_id", "value": "", "type": "string"},
+		{"key": "mfa_secret", "value": "", "type": "string"},
+		{"key": "department_id", "value": "", "type": "string"},
+		{"key": "position_id", "value": "", "type": "string"},
+		{"key": "employee_uuid", "value": "", "type": "string"},
+		{"key": "leave_type_id", "value": "", "type": "string"},
+		{"key": "leave_request_id", "value": "", "type": "string"},
+		{"key": "pay_component_id", "value": "", "type": "string"},
+		{"key": "payroll_period_id", "value": "", "type": "string"},
+		{"key": "vacancy_id", "value": "", "type": "string"},
+		{"key": "application_id", "value": "", "type": "string"},
+		{"key": "interview_id", "value": "", "type": "string"},
+		{"key": "appraisal_cycle_id", "value": "", "type": "string"},
+		{"key": "appraisal_id", "value": "", "type": "string"},
+		{"key": "suggestion_id", "value": "", "type": "string"},
+		{"key": "employee_note_id", "value": "", "type": "string"},
+		{"key": "employee_document_id", "value": "", "type": "string"}
 	]
 }

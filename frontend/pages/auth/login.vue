@@ -11,13 +11,14 @@ const auth = useAuthStore()
 const toast = useToast()
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const loading = ref(false)
 
-const schema = toTypedSchema(z.object({
-  tenant: z.string().min(1, 'Tenant handle is required'),
-  email: z.string().email('Enter a valid email'),
-  password: z.string().min(1, 'Password is required'),
-}))
+const schema = computed(() => toTypedSchema(z.object({
+  tenant: z.string().min(1, t('auth.login.errors.tenantRequired')),
+  email: z.string().email(t('auth.login.errors.emailInvalid')),
+  password: z.string().min(1, t('auth.login.errors.passwordRequired')),
+})))
 
 const { defineField, handleSubmit, errors, setValues } = useForm({
   validationSchema: schema,
@@ -40,17 +41,17 @@ const onSubmit = handleSubmit(async (values) => {
   auth.setTenant(values.tenant)
   try {
     const res = await iam.login({ email: values.email, password: values.password })
-    if (!res.success) throw new Error(res.message || 'Login failed')
+    if (!res.success) throw new Error(res.message || t('auth.login.failed'))
     auth.setSession({ user: res.data.user, token: res.data.token, tenant: values.tenant })
-    toast.add({ severity: 'success', summary: 'Welcome back', detail: res.data.user.name, life: 2000 })
+    toast.add({ severity: 'success', summary: t('auth.login.welcomeBack'), detail: res.data.user.name, life: 2000 })
     const redirect = (route.query.redirect as string) || '/'
     await router.push(redirect)
   } catch (err: unknown) {
     const data = (err as { data?: { message?: string } }).data
     toast.add({
       severity: 'error',
-      summary: 'Sign in failed',
-      detail: data?.message ?? 'Invalid credentials or unknown tenant.',
+      summary: t('auth.login.failed'),
+      detail: data?.message ?? t('auth.login.failedDetail'),
       life: 5000,
     })
   } finally {
@@ -62,21 +63,22 @@ const onSubmit = handleSubmit(async (values) => {
 <template>
   <Card class="shadow-2xl">
     <template #title>
-      <div class="text-xl font-semibold">Sign in to your workspace</div>
+      <div class="text-xl font-semibold">{{ t('auth.login.title') }}</div>
       <p class="text-sm font-normal text-surface-500 mt-1">
-        No workspace yet? <NuxtLink to="/auth/onboard" class="text-primary-600 hover:underline">Create one</NuxtLink>
+        {{ t('auth.login.noWorkspace') }}
+        <NuxtLink to="/auth/onboard" class="text-primary-600 hover:underline">{{ t('auth.login.createOne') }}</NuxtLink>
       </p>
     </template>
 
     <template #content>
       <form class="space-y-4" @submit.prevent="onSubmit">
         <div>
-          <label for="tenant" class="block text-sm font-medium mb-1">Workspace handle</label>
+          <label for="tenant" class="block text-sm font-medium mb-1">{{ t('auth.login.workspaceHandle') }}</label>
           <InputText
             id="tenant"
             v-model="tenant"
             v-bind="tenantAttrs"
-            placeholder="acme"
+            :placeholder="t('auth.login.workspacePlaceholder')"
             class="w-full"
             :invalid="!!errors.tenant"
             autocomplete="organization"
@@ -85,13 +87,13 @@ const onSubmit = handleSubmit(async (values) => {
         </div>
 
         <div>
-          <label for="email" class="block text-sm font-medium mb-1">Email</label>
+          <label for="email" class="block text-sm font-medium mb-1">{{ t('common.email') }}</label>
           <InputText
             id="email"
             v-model="email"
             v-bind="emailAttrs"
             type="email"
-            placeholder="you@example.com"
+            :placeholder="t('auth.login.emailPlaceholder')"
             class="w-full"
             :invalid="!!errors.email"
             autocomplete="email"
@@ -100,7 +102,7 @@ const onSubmit = handleSubmit(async (values) => {
         </div>
 
         <div>
-          <label for="password" class="block text-sm font-medium mb-1">Password</label>
+          <label for="password" class="block text-sm font-medium mb-1">{{ t('common.password') }}</label>
           <Password
             id="password"
             v-model="password"
@@ -116,7 +118,7 @@ const onSubmit = handleSubmit(async (values) => {
           <small v-if="errors.password" class="text-red-600">{{ errors.password }}</small>
         </div>
 
-        <Button type="submit" label="Sign in" icon="pi pi-sign-in" :loading="loading" class="w-full" />
+        <Button type="submit" :label="t('auth.login.signIn')" icon="pi pi-sign-in" :loading="loading" class="w-full" />
 
         <Button
           type="button"
@@ -124,7 +126,7 @@ const onSubmit = handleSubmit(async (values) => {
           text
           size="small"
           icon="pi pi-bolt"
-          label="Use demo credentials"
+          :label="t('auth.login.useDemo')"
           class="w-full"
           @click="fillDemo"
         />

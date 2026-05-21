@@ -14,6 +14,8 @@ export interface Role {
   id: string
   name: string
   description: string | null
+  parent_role_id?: string | null
+  parent?: Pick<Role, 'id' | 'name'> | null
   permissions?: Permission[]
   created_at: string
   updated_at: string
@@ -72,4 +74,35 @@ export interface Tenant {
   name: string
   handle: string
   status: string
+  logo_path?: string | null
+  primary_color?: string | null
+  secondary_color?: string | null
+}
+
+export interface SsoProvider {
+  id: string
+  name: string
+  protocol: 'oidc' | 'saml'
+  issuer?: string | null
+  client_id?: string | null
+  discovery_url?: string | null
+  redirect_uri?: string | null
+  scopes?: string[] | null
+  metadata?: Record<string, unknown> | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface SsoProviderInput {
+  name: string
+  protocol: 'oidc' | 'saml'
+  issuer?: string | null
+  client_id?: string | null
+  client_secret?: string | null
+  discovery_url?: string | null
+  redirect_uri?: string | null
+  scopes?: string[] | null
+  metadata?: Record<string, unknown> | null
+  is_active?: boolean
 }

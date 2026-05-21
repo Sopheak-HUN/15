@@ -18,6 +18,9 @@ class Tenant extends BaseTenant implements TenantWithDatabase
             'name',
             'handle',
             'status',
+            'logo_path',
+            'primary_color',
+            'secondary_color',
         ];
     }
 }

@@ -4,6 +4,7 @@ import type { Permission } from '~/types/iam'
 definePageMeta({ middleware: 'auth' })
 
 const iam = useIamApi()
+const { t } = useI18n()
 const { data, pending } = await useAsyncData('iam-permissions-list', () => iam.listPermissions())
 const perms = computed<Permission[]>(() => data.value?.data ?? [])
 
@@ -40,15 +41,19 @@ const grouped = computed<PermGroup[]>(() => {
   <div class="space-y-6">
     <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
       <div>
-        <h1 class="text-2xl font-semibold tracking-tight">Permission catalog</h1>
+        <h1 class="text-2xl font-semibold tracking-tight">{{ t('permissions.title') }}</h1>
         <p class="text-surface-500 mt-1">
-          Permissions follow the <code>module.feature.action</code> pattern. Assign them to roles under
-          <NuxtLink to="/iam/roles" class="text-primary-600 hover:underline">Roles</NuxtLink>.
+          <i18n-t keypath="permissions.subtitle" tag="span">
+            <template #pattern><code>module.feature.action</code></template>
+            <template #link>
+              <NuxtLink to="/iam/roles" class="text-primary-600 hover:underline">{{ t('nav.roles') }}</NuxtLink>
+            </template>
+          </i18n-t>
         </p>
       </div>
       <IconField icon-position="left" class="w-full sm:w-72">
         <InputIcon class="pi pi-search" />
-        <InputText v-model="search" placeholder="Search permissions..." class="w-full" />
+        <InputText v-model="search" :placeholder="t('permissions.searchPlaceholder')" class="w-full" />
       </IconField>
     </div>
 
@@ -61,7 +66,11 @@ const grouped = computed<PermGroup[]>(() => {
         <template #content>
           <div class="py-12 text-center">
             <i class="pi pi-key text-4xl text-surface-300 mb-3" />
-            <p class="text-surface-500">No permissions seeded yet. Run <code class="font-mono">php artisan tenants:seed</code> on the backend.</p>
+            <p class="text-surface-500">
+              <i18n-t keypath="permissions.emptySeed" tag="span">
+                <template #cmd><code class="font-mono">php artisan tenants:seed</code></template>
+              </i18n-t>
+            </p>
           </div>
         </template>
       </Card>
@@ -72,7 +81,11 @@ const grouped = computed<PermGroup[]>(() => {
         <template #title>
           <div class="flex items-center gap-3">
             <Tag :value="group.module" severity="info" class="font-mono" />
-            <span class="text-sm text-surface-500">{{ group.perms.length }} permission{{ group.perms.length === 1 ? '' : 's' }}</span>
+            <span class="text-sm text-surface-500">
+              {{ group.perms.length === 1
+                ? t('permissions.countOne', { count: group.perms.length })
+                : t('permissions.countOther', { count: group.perms.length }) }}
+            </span>
           </div>
         </template>
         <template #content>

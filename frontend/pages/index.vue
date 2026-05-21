@@ -5,6 +5,7 @@ definePageMeta({ middleware: 'auth' })
 
 const auth = useAuthStore()
 const iam = useIamApi()
+const { t } = useI18n()
 
 const { data: rolesRes } = await useAsyncData('home-roles', () => iam.listRoles())
 const { data: permsRes } = await useAsyncData('home-perms', () => iam.listPermissions())
@@ -18,9 +19,13 @@ const auditCount = computed(() => auditRes.value?.data.total ?? 0)
 <template>
   <div class="space-y-6">
     <div>
-      <h1 class="text-2xl font-semibold tracking-tight">Welcome, {{ auth.user?.name }}</h1>
+      <h1 class="text-2xl font-semibold tracking-tight">{{ t('dashboard.welcome', { name: auth.user?.name ?? '' }) }}</h1>
       <p class="text-surface-500 mt-1">
-        You are signed in to tenant <span class="font-mono text-primary-700 dark:text-primary-300">{{ auth.tenant }}</span>.
+        <i18n-t keypath="dashboard.signedInAs" tag="span">
+          <template #tenant>
+            <span class="font-mono text-primary-700 dark:text-primary-300">{{ auth.tenant }}</span>
+          </template>
+        </i18n-t>
       </p>
     </div>
 
@@ -33,7 +38,7 @@ const auditCount = computed(() => auditRes.value?.data.total ?? 0)
                 <i class="pi pi-id-card text-xl" />
               </div>
               <div>
-                <div class="text-sm text-surface-500">Roles</div>
+                <div class="text-sm text-surface-500">{{ t('dashboard.stats.roles') }}</div>
                 <div class="text-2xl font-semibold">{{ rolesCount }}</div>
               </div>
             </div>
@@ -49,7 +54,7 @@ const auditCount = computed(() => auditRes.value?.data.total ?? 0)
                 <i class="pi pi-key text-xl" />
               </div>
               <div>
-                <div class="text-sm text-surface-500">Permissions</div>
+                <div class="text-sm text-surface-500">{{ t('dashboard.stats.permissions') }}</div>
                 <div class="text-2xl font-semibold">{{ permsCount }}</div>
               </div>
             </div>
@@ -65,7 +70,7 @@ const auditCount = computed(() => auditRes.value?.data.total ?? 0)
                 <i class="pi pi-history text-xl" />
               </div>
               <div>
-                <div class="text-sm text-surface-500">Audit entries</div>
+                <div class="text-sm text-surface-500">{{ t('dashboard.stats.auditEntries') }}</div>
                 <div class="text-2xl font-semibold">{{ auditCount }}</div>
               </div>
             </div>
@@ -75,13 +80,37 @@ const auditCount = computed(() => auditRes.value?.data.total ?? 0)
     </div>
 
     <Card>
-      <template #title>Quick start</template>
+      <template #title>{{ t('dashboard.quickStart') }}</template>
       <template #content>
         <ol class="list-decimal pl-6 space-y-1 text-sm text-surface-700 dark:text-surface-300">
-          <li>Define roles under <NuxtLink to="/iam/roles" class="text-primary-600 hover:underline">Roles</NuxtLink>.</li>
-          <li>Review the permission catalog under <NuxtLink to="/iam/permissions" class="text-primary-600 hover:underline">Permissions</NuxtLink>.</li>
-          <li>Track activity in <NuxtLink to="/iam/audit-logs" class="text-primary-600 hover:underline">Audit Logs</NuxtLink>.</li>
-          <li>Customize tenant theme in <NuxtLink to="/iam/branding" class="text-primary-600 hover:underline">Branding</NuxtLink>.</li>
+          <li>
+            <i18n-t keypath="dashboard.steps.defineRoles" tag="span">
+              <template #link>
+                <NuxtLink to="/iam/roles" class="text-primary-600 hover:underline">{{ t('nav.roles') }}</NuxtLink>
+              </template>
+            </i18n-t>
+          </li>
+          <li>
+            <i18n-t keypath="dashboard.steps.reviewPerms" tag="span">
+              <template #link>
+                <NuxtLink to="/iam/permissions" class="text-primary-600 hover:underline">{{ t('nav.permissions') }}</NuxtLink>
+              </template>
+            </i18n-t>
+          </li>
+          <li>
+            <i18n-t keypath="dashboard.steps.trackActivity" tag="span">
+              <template #link>
+                <NuxtLink to="/iam/audit-logs" class="text-primary-600 hover:underline">{{ t('nav.auditLogs') }}</NuxtLink>
+              </template>
+            </i18n-t>
+          </li>
+          <li>
+            <i18n-t keypath="dashboard.steps.customizeBrand" tag="span">
+              <template #link>
+                <NuxtLink to="/iam/branding" class="text-primary-600 hover:underline">{{ t('nav.branding') }}</NuxtLink>
+              </template>
+            </i18n-t>
+          </li>
         </ol>
       </template>
     </Card>

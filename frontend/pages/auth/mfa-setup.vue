@@ -7,32 +7,41 @@ definePageMeta({ middleware: 'auth' })
 
 const iam = useIamApi()
 const toast = useToast()
+const { t } = useI18n()
 const setupLoading = ref(false)
 const verifyLoading = ref(false)
-const setupDone = ref(false)
+const setupData = ref<{ secret: string; provisioning_uri: string } | null>(null)
 
-const schema = toTypedSchema(z.object({
-  code: z.string().length(6, 'Code must be 6 digits').regex(/^\d+$/, 'Digits only'),
-}))
+const schema = computed(() => toTypedSchema(z.object({
+  code: z.string().length(6, t('auth.mfa.errors.codeLength')).regex(/^\d+$/, t('auth.mfa.errors.codeDigits')),
+})))
 const { defineField, handleSubmit, errors } = useForm({
   validationSchema: schema,
   initialValues: { code: '' },
 })
 const [code, codeAttrs] = defineField('code')
 
+// Render the provisioning URI as a QR code via the public chart endpoint
+// (no extra deps). Users can also paste the secret manually.
+const qrUrl = computed(() =>
+  setupData.value
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(setupData.value.provisioning_uri)}`
+    : null,
+)
+
 const startSetup = async () => {
   setupLoading.value = true
   try {
-    await iam.setupMfa()
-    setupDone.value = true
+    const res = await iam.setupMfa() as unknown as { success: boolean; data: { secret: string; provisioning_uri: string } }
+    setupData.value = res.data
     toast.add({
-      severity: 'info',
-      summary: 'MFA setup initialized',
-      detail: 'Backend currently returns a stub — verify any 6-digit code to complete the demo flow.',
-      life: 6000,
+      severity: 'success',
+      summary: t('auth.mfa.secretGenerated'),
+      detail: t('auth.mfa.secretGeneratedDetail'),
+      life: 4000,
     })
   } catch {
-    toast.add({ severity: 'error', summary: 'MFA setup failed', life: 4000 })
+    toast.add({ severity: 'error', summary: t('auth.mfa.setupFailed'), life: 4000 })
   } finally {
     setupLoading.value = false
   }
@@ -42,9 +51,10 @@ const onVerify = handleSubmit(async (values) => {
   verifyLoading.value = true
   try {
     await iam.verifyMfa({ code: values.code })
-    toast.add({ severity: 'success', summary: 'MFA verified', life: 3000 })
-  } catch {
-    toast.add({ severity: 'error', summary: 'Verification failed', life: 4000 })
+    toast.add({ severity: 'success', summary: t('auth.mfa.enabled'), life: 3000 })
+  } catch (err: unknown) {
+    const data = (err as { data?: { message?: string } }).data
+    toast.add({ severity: 'error', summary: t('auth.mfa.verifyFailed'), detail: data?.message, life: 4000 })
   } finally {
     verifyLoading.value = false
   }
@@ -54,40 +64,43 @@ const onVerify = handleSubmit(async (values) => {
 <template>
   <div class="max-w-xl space-y-6">
     <div>
-      <h1 class="text-2xl font-semibold tracking-tight">Two-Factor Authentication</h1>
-      <p class="text-surface-500 mt-1">
-        Strengthen your account with a time-based one-time password.
-      </p>
+      <h1 class="text-2xl font-semibold tracking-tight">{{ t('auth.mfa.title') }}</h1>
+      <p class="text-surface-500 mt-1">{{ t('auth.mfa.subtitle') }}</p>
     </div>
 
-    <Message v-if="!setupDone" severity="info" :closable="false">
-      The backend MFA endpoints are currently stubs (TOTP not yet wired). This page exercises the full flow once they ship.
-    </Message>
-
     <Card>
-      <template #title>Step 1 &mdash; Generate a setup token</template>
+      <template #title>{{ t('auth.mfa.step1Title') }}</template>
       <template #content>
         <p class="text-sm text-surface-500 mb-4">
-          Calls <code>POST /api/auth/mfa/setup</code>. In production this will return a TOTP secret and provisioning URI for your authenticator app.
+          <i18n-t keypath="auth.mfa.step1Body" tag="span">
+            <template #endpoint><code>POST /api/auth/mfa/setup</code></template>
+          </i18n-t>
         </p>
         <Button
-          label="Start MFA setup"
+          v-if="!setupData"
+          :label="t('auth.mfa.start')"
           icon="pi pi-shield"
           :loading="setupLoading"
-          :disabled="setupDone"
           @click="startSetup"
         />
-        <Tag v-if="setupDone" severity="success" value="Setup initialized" class="ml-2" />
+        <div v-else class="flex items-center gap-6">
+          <img :src="qrUrl ?? ''" :alt="t('auth.mfa.qrAlt')" class="rounded-lg border border-surface-200 dark:border-surface-800" />
+          <div class="space-y-2">
+            <div class="text-xs uppercase text-surface-500">{{ t('auth.mfa.manualEntry') }}</div>
+            <code class="text-sm font-mono break-all">{{ setupData.secret }}</code>
+            <Tag severity="success" :value="t('auth.mfa.secretStored')" />
+          </div>
+        </div>
       </template>
     </Card>
 
     <Card>
-      <template #title>Step 2 &mdash; Enter the 6-digit code</template>
+      <template #title>{{ t('auth.mfa.step2Title') }}</template>
       <template #content>
         <form class="space-y-4" @submit.prevent="onVerify">
           <InputOtp v-model="code" v-bind="codeAttrs" :length="6" integer-only />
           <small v-if="errors.code" class="text-red-600 block">{{ errors.code }}</small>
-          <Button type="submit" label="Verify" icon="pi pi-check" :loading="verifyLoading" :disabled="!setupDone" />
+          <Button type="submit" :label="t('auth.mfa.verifyEnable')" icon="pi pi-check" :loading="verifyLoading" :disabled="!setupData" />
         </form>
       </template>
     </Card>

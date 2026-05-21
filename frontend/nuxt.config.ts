@@ -36,7 +36,25 @@ export default defineNuxtConfig({
     '@pinia/nuxt',
     '@primevue/nuxt-module',
     '@vueuse/nuxt',
+    '@nuxtjs/i18n',
   ],
+  i18n: {
+    strategy: 'no_prefix',
+    defaultLocale: 'en',
+    locales: [
+      { code: 'en', name: 'English',  file: 'en.json' },
+      { code: 'km', name: 'ខ្មែរ',     file: 'km.json' },
+    ],
+    lazy: true,
+    langDir: 'locales',
+    detectBrowserLanguage: {
+      useCookie: true,
+      cookieKey: 'erp.locale',
+      fallbackLocale: 'en',
+      redirectOn: 'no_prefix',
+    },
+    bundle: { optimizeTranslationDirective: false },
+  },
   vite: { plugins: [tailwindcss()] },
   css: ['~/assets/css/main.css'],
   runtimeConfig: {

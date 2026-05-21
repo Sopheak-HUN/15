@@ -11,6 +11,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@nuxtjs/i18n": "^9.1.1",
     "@pinia/nuxt": "^0.5.5",
     "@primeuix/themes": "^1.2.5",
     "@primevue/nuxt-module": "^4.2.4",

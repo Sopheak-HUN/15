@@ -10,15 +10,16 @@ const iam = useIamApi()
 const auth = useAuthStore()
 const toast = useToast()
 const router = useRouter()
+const { t } = useI18n()
 const loading = ref(false)
 
-const schema = toTypedSchema(z.object({
-  name: z.string().min(2, 'Company name is required').max(120),
+const schema = computed(() => toTypedSchema(z.object({
+  name: z.string().min(2, t('auth.onboard.errors.nameRequired')).max(120),
   handle: z.string()
-    .min(2, 'Handle must be at least 2 characters')
+    .min(2, t('auth.onboard.errors.handleMin'))
     .max(40)
-    .regex(/^[a-z0-9][a-z0-9-]*$/, 'Use lowercase letters, digits, and dashes only'),
-}))
+    .regex(/^[a-z0-9][a-z0-9-]*$/, t('auth.onboard.errors.handlePattern')),
+})))
 
 const { defineField, handleSubmit, errors } = useForm({
   validationSchema: schema,
@@ -34,8 +35,8 @@ const onSubmit = handleSubmit(async (values) => {
     auth.setTenant(res.tenant.handle)
     toast.add({
       severity: 'success',
-      summary: 'Tenant created',
-      detail: 'Run "php artisan tenants:seed --tenants=' + res.tenant.handle + '" then sign in.',
+      summary: t('auth.onboard.tenantCreated'),
+      detail: t('auth.onboard.seedHint', { handle: res.tenant.handle }),
       life: 6000,
     })
     await router.push({ path: '/auth/login', query: { tenant: res.tenant.handle } })
@@ -43,8 +44,8 @@ const onSubmit = handleSubmit(async (values) => {
     const data = (err as { data?: { message?: string } }).data
     toast.add({
       severity: 'error',
-      summary: 'Onboarding failed',
-      detail: data?.message ?? 'Unable to create tenant — handle may already be in use.',
+      summary: t('auth.onboard.failed'),
+      detail: data?.message ?? t('auth.onboard.failedDetail'),
       life: 6000,
     })
   } finally {
@@ -56,21 +57,22 @@ const onSubmit = handleSubmit(async (values) => {
 <template>
   <Card class="shadow-2xl">
     <template #title>
-      <div class="text-xl font-semibold">Create your workspace</div>
+      <div class="text-xl font-semibold">{{ t('auth.onboard.title') }}</div>
       <p class="text-sm font-normal text-surface-500 mt-1">
-        Already have a workspace? <NuxtLink to="/auth/login" class="text-primary-600 hover:underline">Sign in</NuxtLink>
+        {{ t('auth.onboard.haveAccount') }}
+        <NuxtLink to="/auth/login" class="text-primary-600 hover:underline">{{ t('auth.onboard.signInLink') }}</NuxtLink>
       </p>
     </template>
 
     <template #content>
       <form class="space-y-4" @submit.prevent="onSubmit">
         <div>
-          <label for="name" class="block text-sm font-medium mb-1">Company name</label>
+          <label for="name" class="block text-sm font-medium mb-1">{{ t('auth.onboard.companyName') }}</label>
           <InputText
             id="name"
             v-model="name"
             v-bind="nameAttrs"
-            placeholder="Acme Corp"
+            :placeholder="t('auth.onboard.companyPlaceholder')"
             class="w-full"
             :invalid="!!errors.name"
             autocomplete="organization"
@@ -79,7 +81,7 @@ const onSubmit = handleSubmit(async (values) => {
         </div>
 
         <div>
-          <label for="handle" class="block text-sm font-medium mb-1">Workspace handle</label>
+          <label for="handle" class="block text-sm font-medium mb-1">{{ t('auth.onboard.workspaceHandle') }}</label>
           <InputGroup>
             <InputGroupAddon class="!text-xs text-surface-500">https://</InputGroupAddon>
             <InputText
@@ -92,11 +94,15 @@ const onSubmit = handleSubmit(async (values) => {
               autocomplete="off"
             />
           </InputGroup>
-          <small class="text-surface-500 text-xs">Used as the tenant identifier in the <code>tenant</code> header.</small>
+          <small class="text-surface-500 text-xs">
+            <i18n-t keypath="auth.onboard.handleHelp" tag="span">
+              <template #header><code>tenant</code></template>
+            </i18n-t>
+          </small>
           <div v-if="errors.handle" class="text-red-600 text-xs mt-1">{{ errors.handle }}</div>
         </div>
 
-        <Button type="submit" label="Create workspace" icon="pi pi-check" :loading="loading" class="w-full" />
+        <Button type="submit" :label="t('auth.onboard.create')" icon="pi pi-check" :loading="loading" class="w-full" />
       </form>
     </template>
   </Card>

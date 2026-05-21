@@ -7,13 +7,14 @@ definePageMeta({ middleware: 'auth' })
 
 const iam = useIamApi()
 const toast = useToast()
+const { t } = useI18n()
 const saving = ref(false)
 
-const schema = toTypedSchema(z.object({
+const schema = computed(() => toTypedSchema(z.object({
   logo_path: z.string().max(255).optional().or(z.literal('')),
-  primary_color: z.string().regex(/^#([0-9a-fA-F]{3}){1,2}$/, 'Enter a hex color').optional().or(z.literal('')),
-  secondary_color: z.string().regex(/^#([0-9a-fA-F]{3}){1,2}$/, 'Enter a hex color').optional().or(z.literal('')),
-}))
+  primary_color: z.string().regex(/^#([0-9a-fA-F]{3}){1,2}$/, t('branding.errors.hexInvalid')).optional().or(z.literal('')),
+  secondary_color: z.string().regex(/^#([0-9a-fA-F]{3}){1,2}$/, t('branding.errors.hexInvalid')).optional().or(z.literal('')),
+})))
 
 const { defineField, handleSubmit, errors } = useForm({
   validationSchema: schema,
@@ -35,14 +36,14 @@ const onSubmit = handleSubmit(async (values) => {
       primary_color: values.primary_color || undefined,
       secondary_color: values.secondary_color || undefined,
     })
-    toast.add({ severity: 'success', summary: 'Branding saved', life: 2500 })
+    toast.add({ severity: 'success', summary: t('branding.saved'), life: 2500 })
   } catch (err: unknown) {
     const data = (err as { data?: { message?: string } }).data
     toast.add({
       severity: 'error',
-      summary: 'Save failed',
-      detail: data?.message ?? 'The tenants table is missing branding columns — the migration needs to be added first.',
-      life: 7000,
+      summary: t('branding.saveFailed'),
+      detail: data?.message ?? t('branding.saveFailedDetail'),
+      life: 6000,
     })
   } finally {
     saving.value = false
@@ -53,33 +54,29 @@ const onSubmit = handleSubmit(async (values) => {
 <template>
   <div class="space-y-6 max-w-3xl">
     <div>
-      <h1 class="text-2xl font-semibold tracking-tight">Branding</h1>
-      <p class="text-surface-500 mt-1">Customize your workspace logo and color scheme.</p>
+      <h1 class="text-2xl font-semibold tracking-tight">{{ t('branding.title') }}</h1>
+      <p class="text-surface-500 mt-1">{{ t('branding.subtitle') }}</p>
     </div>
-
-    <Message severity="warn" :closable="false">
-      The backend currently rejects this endpoint until the <code>logo_path</code>, <code>primary_color</code>, <code>secondary_color</code> columns are added to the <code>tenants</code> migration. The UI is wired and will start working as soon as the migration ships.
-    </Message>
 
     <Card>
       <template #content>
         <form class="space-y-6" @submit.prevent="onSubmit">
           <div>
-            <label for="logo" class="block text-sm font-medium mb-1">Logo path</label>
+            <label for="logo" class="block text-sm font-medium mb-1">{{ t('branding.logoPath') }}</label>
             <InputText
               id="logo"
               v-model="logoPath"
               v-bind="logoAttrs"
-              placeholder="branding/acme-logo.png"
+              :placeholder="t('branding.logoPlaceholder')"
               class="w-full"
               :invalid="!!errors.logo_path"
             />
-            <small class="text-surface-500 text-xs">Relative path inside the tenant storage disk.</small>
+            <small class="text-surface-500 text-xs">{{ t('branding.logoHelp') }}</small>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label for="primary" class="block text-sm font-medium mb-1">Primary color</label>
+              <label for="primary" class="block text-sm font-medium mb-1">{{ t('branding.primaryColor') }}</label>
               <div class="flex items-center gap-2">
                 <ColorPicker v-model="primary" v-bind="primaryAttrs" format="hex" />
                 <InputText v-model="primary" class="flex-1 font-mono" :invalid="!!errors.primary_color" />
@@ -88,7 +85,7 @@ const onSubmit = handleSubmit(async (values) => {
             </div>
 
             <div>
-              <label for="secondary" class="block text-sm font-medium mb-1">Secondary color</label>
+              <label for="secondary" class="block text-sm font-medium mb-1">{{ t('branding.secondaryColor') }}</label>
               <div class="flex items-center gap-2">
                 <ColorPicker v-model="secondary" v-bind="secondaryAttrs" format="hex" />
                 <InputText v-model="secondary" class="flex-1 font-mono" :invalid="!!errors.secondary_color" />
@@ -98,20 +95,20 @@ const onSubmit = handleSubmit(async (values) => {
           </div>
 
           <div class="rounded-xl border border-surface-200 dark:border-surface-800 p-6 bg-surface-50 dark:bg-surface-900">
-            <p class="text-xs uppercase text-surface-500 mb-3">Preview</p>
+            <p class="text-xs uppercase text-surface-500 mb-3">{{ t('branding.preview') }}</p>
             <div class="flex items-center gap-4">
               <div class="size-12 rounded-xl grid place-items-center text-white font-bold" :style="{ background: primary || '#4f46e5' }">
-                ERP
+                {{ t('app.short') }}
               </div>
               <div>
-                <div class="font-semibold" :style="{ color: primary || '#4f46e5' }">Primary brand</div>
-                <div class="text-sm" :style="{ color: secondary || '#64748b' }">Secondary accent</div>
+                <div class="font-semibold" :style="{ color: primary || '#4f46e5' }">{{ t('branding.previewPrimary') }}</div>
+                <div class="text-sm" :style="{ color: secondary || '#64748b' }">{{ t('branding.previewSecondary') }}</div>
               </div>
             </div>
           </div>
 
           <div class="flex justify-end">
-            <Button type="submit" label="Save branding" icon="pi pi-check" :loading="saving" />
+            <Button type="submit" :label="t('branding.saveBranding')" icon="pi pi-check" :loading="saving" />
           </div>
         </form>
       </template>

@@ -1,4 +1,14 @@
-import type { ApiEnvelope, AuditLog, Paginated, Permission, Role, Tenant, User } from '~/types/iam'
+import type {
+  ApiEnvelope,
+  AuditLog,
+  Paginated,
+  Permission,
+  Role,
+  SsoProvider,
+  SsoProviderInput,
+  Tenant,
+  User,
+} from '~/types/iam'
 
 /**
  * Typed wrappers for the IAM endpoints exposed by the Laravel backend.
@@ -24,9 +34,11 @@ export function useIamApi() {
 
     // Roles
     listRoles: () => api.get<{ data: Role[] }>('/api/iam/roles'),
-    createRole: (body: { name: string; description?: string }) =>
+    showRole: (id: string) =>
+      api.get<{ data: { role: Role; effective_permissions: Permission[] } }>(`/api/iam/roles/${id}`),
+    createRole: (body: { name: string; description?: string; parent_role_id?: string | null }) =>
       api.post<{ success: boolean; data: Role }>('/api/iam/roles', body),
-    updateRole: (id: string, body: { name: string; description?: string }) =>
+    updateRole: (id: string, body: { name: string; description?: string; parent_role_id?: string | null }) =>
       api.put<{ success: boolean; data: Role }>(`/api/iam/roles/${id}`, body),
     deleteRole: (id: string) =>
       api.del<{ success: boolean }>(`/api/iam/roles/${id}`),
@@ -42,5 +54,19 @@ export function useIamApi() {
     // Branding
     updateBranding: (body: { logo_path?: string; primary_color?: string; secondary_color?: string }) =>
       api.put<{ success: boolean; data: Tenant }>('/api/iam/branding', body),
+
+    // SSO
+    listSsoProviders: () =>
+      api.get<{ data: SsoProvider[] }>('/api/auth/sso/providers'),
+    createSsoProvider: (body: SsoProviderInput) =>
+      api.post<{ success: boolean; data: SsoProvider }>('/api/iam/sso-providers', body),
+    updateSsoProvider: (id: string, body: Partial<SsoProviderInput>) =>
+      api.put<{ success: boolean; data: SsoProvider }>(`/api/iam/sso-providers/${id}`, body),
+    deleteSsoProvider: (id: string) =>
+      api.del<{ success: boolean }>(`/api/iam/sso-providers/${id}`),
+    ssoRedirect: (id: string) =>
+      api.get<{ success: boolean; data: { authorization_url: string } }>(`/api/auth/sso/${id}/redirect`),
+    ssoCallback: (body: { code: string; state: string }) =>
+      api.post<ApiEnvelope<{ user: User; token: string }>>('/api/auth/sso/callback', body),
   }
 }

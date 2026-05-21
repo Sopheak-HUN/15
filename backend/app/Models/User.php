@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Tenants\Modules\IAM\Models\Role;
 use App\Tenants\Traits\Auditable;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -31,6 +32,8 @@ class User extends Authenticatable
         'mfa_secret',
         'mfa_enabled',
         'is_active',
+        'sso_provider_id',
+        'sso_subject',
     ];
 
     /**

@@ -4,6 +4,7 @@ import type { AuditLog } from '~/types/iam'
 definePageMeta({ middleware: 'auth' })
 
 const iam = useIamApi()
+const { t, locale } = useI18n()
 const { data, pending, refresh } = await useAsyncData('iam-audit-logs', () => iam.listAuditLogs())
 
 const logs = computed<AuditLog[]>(() => data.value?.data.data ?? [])
@@ -25,7 +26,7 @@ const actionSeverity = (action: string): 'success' | 'info' | 'warn' | 'danger' 
 }
 
 const formatDate = (iso: string) => {
-  return new Date(iso).toLocaleString(undefined, {
+  return new Date(iso).toLocaleString(locale.value, {
     year: 'numeric', month: 'short', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
   })
@@ -38,12 +39,14 @@ const shortType = (full: string) => full.split('\\').pop() ?? full
   <div class="space-y-6">
     <div class="flex items-end justify-between gap-4">
       <div>
-        <h1 class="text-2xl font-semibold tracking-tight">Audit Logs</h1>
+        <h1 class="text-2xl font-semibold tracking-tight">{{ t('audit.title') }}</h1>
         <p class="text-surface-500 mt-1">
-          Immutable history of every auditable model change. Latest <Badge :value="total" /> entries.
+          <i18n-t keypath="audit.subtitle" tag="span">
+            <template #total><Badge :value="total" /></template>
+          </i18n-t>
         </p>
       </div>
-      <Button label="Refresh" icon="pi pi-refresh" severity="secondary" outlined @click="refresh()" :loading="pending" />
+      <Button :label="t('common.refresh')" icon="pi pi-refresh" severity="secondary" outlined :loading="pending" @click="refresh()" />
     </div>
 
     <Card>
@@ -62,64 +65,64 @@ const shortType = (full: string) => full.split('\\').pop() ?? full
         >
           <template #empty>
             <div class="py-10 text-center text-surface-500">
-              No audit entries yet. Critical actions on roles &amp; permissions will appear here.
+              {{ t('audit.empty') }}
             </div>
           </template>
 
-          <Column field="created_at" header="When" sortable :style="{ width: '200px' }">
+          <Column field="created_at" :header="t('audit.columns.when')" sortable :style="{ width: '200px' }">
             <template #body="{ data }">
               <span class="font-mono text-xs">{{ formatDate(data.created_at) }}</span>
             </template>
           </Column>
-          <Column field="action" header="Action" :style="{ width: '120px' }">
+          <Column field="action" :header="t('audit.columns.action')" :style="{ width: '120px' }">
             <template #body="{ data }">
               <Tag :value="data.action" :severity="actionSeverity(data.action)" />
             </template>
           </Column>
-          <Column field="auditable_type" header="Entity">
+          <Column field="auditable_type" :header="t('audit.columns.entity')">
             <template #body="{ data }">
               <span class="font-medium">{{ shortType(data.auditable_type) }}</span>
               <span class="text-surface-400 ml-2 font-mono text-xs">{{ data.auditable_id }}</span>
             </template>
           </Column>
-          <Column field="user_id" header="Actor" :style="{ width: '180px' }">
+          <Column field="user_id" :header="t('audit.columns.actor')" :style="{ width: '180px' }">
             <template #body="{ data }">
-              <span class="font-mono text-xs text-surface-500">{{ data.user_id || 'system' }}</span>
+              <span class="font-mono text-xs text-surface-500">{{ data.user_id || t('common.system') }}</span>
             </template>
           </Column>
         </DataTable>
       </template>
     </Card>
 
-    <Dialog v-model:visible="detailOpen" modal header="Audit entry" :style="{ width: '48rem' }">
+    <Dialog v-model:visible="detailOpen" modal :header="t('audit.detailTitle')" :style="{ width: '48rem' }">
       <div v-if="selectedLog" class="space-y-4">
         <div class="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <div class="text-xs uppercase text-surface-500">When</div>
+            <div class="text-xs uppercase text-surface-500">{{ t('audit.columns.when') }}</div>
             <div class="font-mono">{{ formatDate(selectedLog.created_at) }}</div>
           </div>
           <div>
-            <div class="text-xs uppercase text-surface-500">Action</div>
+            <div class="text-xs uppercase text-surface-500">{{ t('audit.columns.action') }}</div>
             <Tag :value="selectedLog.action" :severity="actionSeverity(selectedLog.action)" />
           </div>
           <div>
-            <div class="text-xs uppercase text-surface-500">Entity</div>
+            <div class="text-xs uppercase text-surface-500">{{ t('audit.columns.entity') }}</div>
             <div>{{ shortType(selectedLog.auditable_type) }} <span class="font-mono text-xs text-surface-400">{{ selectedLog.auditable_id }}</span></div>
           </div>
           <div>
-            <div class="text-xs uppercase text-surface-500">Actor</div>
-            <div class="font-mono text-xs">{{ selectedLog.user_id || 'system' }}</div>
+            <div class="text-xs uppercase text-surface-500">{{ t('audit.columns.actor') }}</div>
+            <div class="font-mono text-xs">{{ selectedLog.user_id || t('common.system') }}</div>
           </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <div class="text-xs uppercase text-surface-500 mb-1">Old values</div>
-            <pre class="text-xs bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded p-3 overflow-auto max-h-64">{{ selectedLog.old_values ? JSON.stringify(selectedLog.old_values, null, 2) : '—' }}</pre>
+            <div class="text-xs uppercase text-surface-500 mb-1">{{ t('audit.oldValues') }}</div>
+            <pre class="text-xs bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded p-3 overflow-auto max-h-64">{{ selectedLog.old_values ? JSON.stringify(selectedLog.old_values, null, 2) : t('common.dash') }}</pre>
           </div>
           <div>
-            <div class="text-xs uppercase text-surface-500 mb-1">New values</div>
-            <pre class="text-xs bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded p-3 overflow-auto max-h-64">{{ selectedLog.new_values ? JSON.stringify(selectedLog.new_values, null, 2) : '—' }}</pre>
+            <div class="text-xs uppercase text-surface-500 mb-1">{{ t('audit.newValues') }}</div>
+            <pre class="text-xs bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded p-3 overflow-auto max-h-64">{{ selectedLog.new_values ? JSON.stringify(selectedLog.new_values, null, 2) : t('common.dash') }}</pre>
           </div>
         </div>
       </div>
