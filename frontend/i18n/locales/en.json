@@ -53,6 +53,7 @@
     "departments": "Departments",
     "positions": "Positions",
     "leave": "Leave",
+    "attendance": "Attendance",
     "payroll": "Payroll",
     "recruitment": "Recruitment",
     "performance": "Performance",
@@ -902,6 +903,58 @@
         "docCreated": "Document recorded",
         "docDeleted": "Document deleted"
       }
+    },
+    "attendance": {
+      "title": "Attendance",
+      "subtitle": "Track your daily check-in/out log, view stats, and manage overrides.",
+      "liveTime": "Current Time",
+      "clockCard": "Clock In / Clock Out",
+      "clockIn": "Clock In",
+      "clockOut": "Clock Out",
+      "notes": "Clock Notes",
+      "notesPlaceholder": "Enter optional remarks (e.g. working from home, client meeting)...",
+      "status": {
+        "label": "Your Status Today",
+        "notCheckedIn": "Not Checked In Yet",
+        "checkedIn": "Checked In at {time}",
+        "checkedOut": "Checked Out at {time}"
+      },
+      "stats": {
+        "title": "My Statistics",
+        "subtitle": "Summary of attendance for the current month.",
+        "present": "Present",
+        "late": "Late",
+        "absent": "Absent",
+        "halfDay": "Half Day",
+        "onLeave": "On Leave"
+      },
+      "directory": {
+        "title": "Attendance Directory",
+        "subtitle": "Administer daily logs, override check-in/out records, or record manual entries.",
+        "new": "Manual Log",
+        "empty": "No attendance records match the selected filters."
+      },
+      "dialog": {
+        "createTitle": "Create Manual Log",
+        "editTitle": "Edit Attendance Record for {name}",
+        "fields": {
+          "employee": "Employee",
+          "date": "Date",
+          "status": "Status",
+          "checkIn": "Check In Time",
+          "checkOut": "Check Out Time",
+          "notes": "Notes"
+        }
+      },
+      "toast": {
+        "checkedIn": "Checked in successfully",
+        "checkedOut": "Checked out successfully",
+        "created": "Attendance log recorded",
+        "updated": "Attendance log updated",
+        "deleted": "Attendance log deleted"
+      },
+      "noEmployee": "No Employee Profile",
+      "noEmployeeDetail": "Your user account is not linked to an employee profile. ESS Clock In/Out is disabled, but you can manage logs for other employees if you have the permission."
     }
   }
 }

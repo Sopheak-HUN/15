@@ -51,6 +51,10 @@ export interface Employee {
   status: string
   currency: string
   pay_frequency: string
+  base_salary?: string | number | null
+  national_id?: string | null
+  bank_account?: string | null
+  tax_id?: string | null
   department?: Pick<Department, 'id' | 'name'> | null
   position?: Pick<Position, 'id' | 'title'> | null
   manager?: { id: string; first_name: string; last_name: string } | null
@@ -266,3 +270,29 @@ export interface EmployeeDocument {
 
 export type PaginatedResp<T> = { data: Paginated<T> }
 export type ListResp<T> = { data: T[] }
+
+export interface Attendance {
+  id: string
+  employee_id: string
+  date: string
+  check_in: string | null
+  check_out: string | null
+  status: 'present' | 'late' | 'absent' | 'half_day' | 'on_leave'
+  notes: string | null
+  created_at: string
+  updated_at: string
+  employee?: {
+    id: string
+    first_name: string
+    last_name: string
+    employee_id: string
+  }
+}
+
+export interface AttendanceStats {
+  present: number
+  late: number
+  absent: number
+  half_day: number
+  on_leave: number
+}

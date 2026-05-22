@@ -51,7 +51,7 @@ export default defineNuxtConfig({
       useCookie: true,
       cookieKey: 'erp.locale',
       fallbackLocale: 'en',
-      redirectOn: 'no_prefix',
+      redirectOn: 'no prefix',
     },
     bundle: { optimizeTranslationDirective: false },
   },

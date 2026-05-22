@@ -29,6 +29,7 @@ use App\Tenants\Modules\HRM\Controllers\AppraisalController;
 use App\Tenants\Modules\HRM\Controllers\SuggestionController;
 use App\Tenants\Modules\HRM\Controllers\EmployeeNoteController;
 use App\Tenants\Modules\HRM\Controllers\EmployeeDocumentController;
+use App\Tenants\Modules\HRM\Controllers\AttendanceController;
 
 // Tenant is identified via the `tenant` HTTP header (or `?tenant=` query param)
 // carrying the tenant handle/id. Header name is configured in TenancyServiceProvider.
@@ -129,6 +130,12 @@ Route::middleware([
             Route::apiResource('employee-documents', EmployeeDocumentController::class)
                 ->parameters(['employee-documents' => 'employee_document'])
                 ->only(['index', 'show', 'store', 'destroy']);
+
+            // Attendance
+            Route::apiResource('attendances', AttendanceController::class);
+            Route::post('attendance/check-in',  [AttendanceController::class, 'checkIn']);
+            Route::post('attendance/check-out', [AttendanceController::class, 'checkOut']);
+            Route::get('attendance/stats',      [AttendanceController::class, 'stats']);
         });
     });
 });

@@ -5,7 +5,7 @@ const items = computed(() =>
   (locales.value as { code: string; name: string }[]).map((l) => ({
     label: l.name,
     icon: l.code === locale.value ? 'pi pi-check' : 'pi pi-globe',
-    command: () => setLocale(l.code),
+    command: () => setLocale(l.code as any),
   })),
 )
 

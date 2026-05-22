@@ -1,5 +1,5 @@
 import type {
-  Application, Appraisal, AppraisalCycle, Department, Employee, EmployeeDocument,
+  Application, Appraisal, AppraisalCycle, Attendance, AttendanceStats, Department, Employee, EmployeeDocument,
   EmployeeNote, Interview, InterviewFeedback, LeaveBalance, LeaveRequest, LeaveType,
   ListResp, PaginatedResp, PayComponent, Payslip, PayrollPeriod, Position, Suggestion,
   Vacancy,
@@ -161,5 +161,18 @@ export function useHrmApi() {
     createEmployeeDocument: (body: Partial<EmployeeDocument> & Record<string, unknown>) =>
       api.post<{ success: boolean; data: EmployeeDocument }>('/api/hrm/employee-documents', body),
     deleteEmployeeDocument: (id: string) => api.del<{ success: boolean }>(`/api/hrm/employee-documents/${id}`),
+
+    // ----- Attendance -----
+    listAttendances: (params: { employee_id?: string; start_date?: string; end_date?: string; date?: string; status?: string; per_page?: number; page?: number } = {}) =>
+      api.get<PaginatedResp<Attendance>>('/api/hrm/attendances' + qs(params)),
+    showAttendance: (id: string) => api.get<{ data: Attendance }>(`/api/hrm/attendances/${id}`),
+    createAttendance: (body: Partial<Attendance>) => api.post<{ success: boolean; data: Attendance }>('/api/hrm/attendances', body),
+    updateAttendance: (id: string, body: Partial<Attendance>) =>
+      api.put<{ success: boolean; data: Attendance }>(`/api/hrm/attendances/${id}`, body),
+    deleteAttendance: (id: string) => api.del<{ success: boolean }>(`/api/hrm/attendances/${id}`),
+    checkIn: (body?: { notes?: string }) => api.post<{ success: boolean; data: Attendance }>('/api/hrm/attendance/check-in', body),
+    checkOut: (body?: { notes?: string }) => api.post<{ success: boolean; data: Attendance }>('/api/hrm/attendance/check-out', body),
+    getAttendanceStats: (params: { employee_id: string; start_date: string; end_date: string }) =>
+      api.get<{ data: AttendanceStats }>('/api/hrm/attendance/stats' + qs(params)),
   }
 }

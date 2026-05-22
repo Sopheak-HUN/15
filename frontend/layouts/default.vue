@@ -34,6 +34,7 @@ const nav = computed<NavEntry[]>(() => [
       { label: t('nav.departments'), icon: 'pi pi-sitemap',    to: '/hrm/departments' },
       { label: t('nav.positions'),   icon: 'pi pi-bookmark',   to: '/hrm/positions' },
       { label: t('nav.leave'),       icon: 'pi pi-calendar',   to: '/hrm/leave' },
+      { label: t('nav.attendance'),  icon: 'pi pi-clock',      to: '/hrm/attendance' },
       { label: t('nav.payroll'),     icon: 'pi pi-dollar',     to: '/hrm/payroll' },
       { label: t('nav.recruitment'), icon: 'pi pi-briefcase',  to: '/hrm/recruitment' },
       { label: t('nav.performance'), icon: 'pi pi-chart-line', to: '/hrm/performance' },

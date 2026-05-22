@@ -158,7 +158,7 @@ const openDetail = (row: Suggestion) => { detail.value = row; detailOpen.value =
           </Column>
           <Column :header="t('hrm.suggestions.columns.submitted')">
             <template #body="{ data }">
-              <span class="text-xs text-surface-500">{{ data.created_at }}</span>
+              <span class="text-xs text-surface-500 font-mono">{{ formatDateTime(data.created_at) }}</span>
             </template>
           </Column>
           <Column header="" body-class="text-right !py-2" :style="{ width: '240px' }">

@@ -44,14 +44,29 @@ const statusOptions = computed(() => ['pending', 'approved', 'rejected'])
 // ---------- New request dialog ----------
 const reqDialog = ref(false)
 const reqSaving = ref(false)
-const reqSchema = computed(() => toTypedSchema(z.object({
-  employee_id: z.string().uuid(),
-  leave_type_id: z.string().uuid(),
-  start_date: z.string().min(1),
-  end_date: z.string().min(1),
-  days: z.coerce.number().min(0.5).nullable().optional(),
-  reason: z.string().max(500).optional().or(z.literal('')),
-})))
+const reqSchema = computed(() => {
+  const datePreprocess = (val: unknown) => {
+    if (val instanceof Date) {
+      const year = val.getFullYear()
+      const month = String(val.getMonth() + 1).padStart(2, '0')
+      const day = String(val.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+    if (typeof val === 'string' && val.trim() !== '') {
+      return val.split('T')[0]
+    }
+    return null
+  }
+
+  return toTypedSchema(z.object({
+    employee_id: z.string().uuid(),
+    leave_type_id: z.string().uuid(),
+    start_date: z.preprocess(datePreprocess, z.string().min(1, 'Start date is required')),
+    end_date: z.preprocess(datePreprocess, z.string().min(1, 'End date is required')),
+    days: z.coerce.number().min(0.5).nullable().optional(),
+    reason: z.string().max(500).optional().or(z.literal('')),
+  }))
+})
 const { defineField, handleSubmit, errors, resetForm } = useForm({
   validationSchema: reqSchema,
   initialValues: { employee_id: '', leave_type_id: '', start_date: '', end_date: '', days: null, reason: '' },
@@ -68,27 +83,40 @@ const openNewRequest = () => {
   reqDialog.value = true
 }
 
-const onSubmitRequest = handleSubmit(async (values) => {
-  reqSaving.value = true
-  try {
-    await hrm.submitLeaveRequest({
-      employee_id: values.employee_id,
-      leave_type_id: values.leave_type_id,
-      start_date: values.start_date,
-      end_date: values.end_date,
-      days: values.days ?? undefined,
-      reason: values.reason || undefined,
-    })
-    toast.add({ severity: 'success', summary: t('hrm.leave.toast.submitted'), life: 2500 })
-    reqDialog.value = false
-    await refreshRequests()
-  } catch (err: unknown) {
-    const data = (err as { data?: { message?: string } }).data
-    toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: data?.message, life: 5000 })
-  } finally {
-    reqSaving.value = false
+const onSubmitRequest = handleSubmit(
+  async (values) => {
+    reqSaving.value = true
+    try {
+      await hrm.submitLeaveRequest({
+        employee_id: values.employee_id,
+        leave_type_id: values.leave_type_id,
+        start_date: values.start_date,
+        end_date: values.end_date,
+        days: values.days ?? undefined,
+        reason: values.reason || undefined,
+      })
+      toast.add({ severity: 'success', summary: t('hrm.leave.toast.submitted'), life: 2500 })
+      reqDialog.value = false
+      await refreshRequests()
+    } catch (err: unknown) {
+      const data = (err as { data?: { message?: string } }).data
+      toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: data?.message, life: 5000 })
+    } finally {
+      reqSaving.value = false
+    }
+  },
+  ({ errors }) => {
+    const firstError = Object.entries(errors)[0]
+    if (firstError) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Form Validation Error',
+        detail: `${firstError[0]}: ${firstError[1]}`,
+        life: 5000,
+      })
+    }
   }
-})
+)
 
 const approve = async (row: LeaveRequest) => {
   try {
@@ -243,8 +271,8 @@ const statusSeverity = (s: string) =>
                   show-clear
                   class="w-44"
                 />
-                <DatePicker v-model="reqFrom" date-format="yy-mm-dd" :placeholder="t('hrm.leave.filters.from')" class="w-44" />
-                <DatePicker v-model="reqTo"   date-format="yy-mm-dd" :placeholder="t('hrm.leave.filters.to')"   class="w-44" />
+                <DatePicker v-model="reqFrom as any" date-format="yy-mm-dd" :placeholder="t('hrm.leave.filters.from')" class="w-44" />
+                <DatePicker v-model="reqTo as any"   date-format="yy-mm-dd" :placeholder="t('hrm.leave.filters.to')"   class="w-44" />
               </div>
 
               <DataTable :value="requests" :loading="reqPending" data-key="id" striped-rows class="text-sm">
@@ -265,7 +293,7 @@ const statusSeverity = (s: string) =>
                 </Column>
                 <Column :header="t('hrm.leave.requests.columns.dates')">
                   <template #body="{ data }">
-                    <span class="font-mono text-xs">{{ data.start_date }} → {{ data.end_date }}</span>
+                    <span class="font-mono text-xs">{{ formatDate(data.start_date) }} → {{ formatDate(data.end_date) }}</span>
                   </template>
                 </Column>
                 <Column field="days" :header="t('hrm.leave.requests.columns.days')" />
@@ -387,11 +415,11 @@ const statusSeverity = (s: string) =>
         <div class="grid grid-cols-2 gap-4">
           <div>
             <FormLabel :label="t('hrm.leave.form.startDate')" required />
-            <DatePicker v-model="startDate" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
+            <DatePicker v-model="startDate as any" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
           </div>
           <div>
             <FormLabel :label="t('hrm.leave.form.endDate')" required />
-            <DatePicker v-model="endDate" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
+            <DatePicker v-model="endDate as any" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
           </div>
         </div>
         <div>

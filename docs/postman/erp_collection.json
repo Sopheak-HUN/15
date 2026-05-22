@@ -2018,6 +2018,180 @@
 							}
 						}
 					]
+				},
+				{
+					"name": "Attendance",
+					"item": [
+						{
+							"name": "List Attendances",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    const rows = (pm.response.json().data && pm.response.json().data.data) || [];",
+											"    if (rows.length) pm.environment.set('attendance_id', rows[0].id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/attendances",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "attendances"]
+								}
+							}
+						},
+						{
+							"name": "Create Manual Attendance",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    pm.environment.set('attendance_id', pm.response.json().data.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"employee_id\": \"{{employee_uuid}}\",\n    \"date\": \"2026-05-22\",\n    \"status\": \"present\",\n    \"check_in\": \"2026-05-22 08:30:00\",\n    \"check_out\": \"2026-05-22 17:30:00\",\n    \"notes\": \"On-time manual log.\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/attendances",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "attendances"]
+								}
+							}
+						},
+						{
+							"name": "Get Attendance Details",
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/attendances/{{attendance_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "attendances", "{{attendance_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Update Manual Attendance",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"status\": \"late\",\n    \"check_in\": \"2026-05-22 09:15:00\",\n    \"notes\": \"Updated: arrived late due to traffic.\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/attendances/{{attendance_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "attendances", "{{attendance_id}}"]
+								}
+							}
+						},
+						{
+							"name": "Check In (Self Service)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    pm.environment.set('attendance_id', pm.response.json().data.id);",
+											"}"
+										]
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"notes\": \"Checking in via web app.\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/attendance/check-in",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "attendance", "check-in"]
+								}
+							}
+						},
+						{
+							"name": "Check Out (Self Service)",
+							"request": {
+								"method": "POST",
+								"header": [
+									{"key": "Content-Type", "value": "application/json"},
+									{"key": "Authorization", "value": "Bearer {{token}}"}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"notes\": \"Checking out, completed tasks.\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/hrm/attendance/check-out",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "attendance", "check-out"]
+								}
+							}
+						},
+						{
+							"name": "Get Attendance Stats",
+							"request": {
+								"method": "GET",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/attendance/stats?employee_id={{employee_uuid}}&start_date=2026-05-01&end_date=2026-05-31",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "attendance", "stats"],
+									"query": [
+										{"key": "employee_id", "value": "{{employee_uuid}}"},
+										{"key": "start_date", "value": "2026-05-01"},
+										{"key": "end_date", "value": "2026-05-31"}
+									]
+								}
+							}
+						},
+						{
+							"name": "Delete Attendance",
+							"request": {
+								"method": "DELETE",
+								"header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+								"url": {
+									"raw": "{{base_url}}/api/hrm/attendances/{{attendance_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "hrm", "attendances", "{{attendance_id}}"]
+								}
+							}
+						}
+					]
 				}
 			]
 		}
@@ -2060,6 +2234,7 @@
 		{"key": "appraisal_id", "value": "", "type": "string"},
 		{"key": "suggestion_id", "value": "", "type": "string"},
 		{"key": "employee_note_id", "value": "", "type": "string"},
-		{"key": "employee_document_id", "value": "", "type": "string"}
+		{"key": "employee_document_id", "value": "", "type": "string"},
+		{"key": "attendance_id", "value": "", "type": "string"}
 	]
 }

@@ -32,6 +32,19 @@ const vacMeta = computed(() => vacData.value?.data)
 const vacDialog = ref(false)
 const editingVac = ref<Vacancy | null>(null)
 const vacSaving = ref(false)
+const datePreprocess = (val: unknown) => {
+  if (val instanceof Date) {
+    const year = val.getFullYear()
+    const month = String(val.getMonth() + 1).padStart(2, '0')
+    const day = String(val.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  if (typeof val === 'string' && val.trim() !== '') {
+    return val.split('T')[0]
+  }
+  return null
+}
+
 const vacSchema = toTypedSchema(z.object({
   title: z.string().min(2).max(200),
   reference: z.string().min(1).max(32),
@@ -44,8 +57,8 @@ const vacSchema = toTypedSchema(z.object({
   salary_max: z.coerce.number().min(0).nullable().optional(),
   employment_type: z.enum(['full_time', 'part_time', 'contract', 'intern']),
   status: z.string().optional().or(z.literal('')),
-  opens_at: z.string().optional().or(z.literal('')),
-  closes_at: z.string().optional().or(z.literal('')),
+  opens_at: z.preprocess(datePreprocess, z.string().nullable().optional()),
+  closes_at: z.preprocess(datePreprocess, z.string().nullable().optional()),
 }))
 const { defineField: vField, handleSubmit: handleVac, errors: vErrors, resetForm: resetVac, setValues: setVac } = useForm({
   validationSchema: vacSchema,
@@ -100,26 +113,39 @@ const openVacEdit = (row: Vacancy) => {
   })
   vacDialog.value = true
 }
-const onSaveVac = handleVac(async (values) => {
-  vacSaving.value = true
-  try {
-    const payload = { ...values }
-    if (editingVac.value) {
-      await hrm.updateVacancy(editingVac.value.id, payload)
-      toast.add({ severity: 'success', summary: t('hrm.recruitment.toast.vacancyUpdated'), life: 2000 })
-    } else {
-      await hrm.createVacancy(payload)
-      toast.add({ severity: 'success', summary: t('hrm.recruitment.toast.vacancyCreated'), life: 2000 })
+const onSaveVac = handleVac(
+  async (values) => {
+    vacSaving.value = true
+    try {
+      const payload = { ...values }
+      if (editingVac.value) {
+        await hrm.updateVacancy(editingVac.value.id, payload)
+        toast.add({ severity: 'success', summary: t('hrm.recruitment.toast.vacancyUpdated'), life: 2000 })
+      } else {
+        await hrm.createVacancy(payload)
+        toast.add({ severity: 'success', summary: t('hrm.recruitment.toast.vacancyCreated'), life: 2000 })
+      }
+      vacDialog.value = false
+      await refreshVacancies()
+    } catch (err: unknown) {
+      const data = (err as { data?: { message?: string } }).data
+      toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: data?.message, life: 5000 })
+    } finally {
+      vacSaving.value = false
     }
-    vacDialog.value = false
-    await refreshVacancies()
-  } catch (err: unknown) {
-    const data = (err as { data?: { message?: string } }).data
-    toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: data?.message, life: 5000 })
-  } finally {
-    vacSaving.value = false
+  },
+  ({ errors }) => {
+    const firstError = Object.entries(errors)[0]
+    if (firstError) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Form Validation Error',
+        detail: `${firstError[0]}: ${firstError[1]}`,
+        life: 5000,
+      })
+    }
   }
-})
+)
 const onDeleteVac = (row: Vacancy) => {
   confirm.require({
     message: t('hrm.common.confirmDelete', { name: row.title }),
@@ -186,20 +212,33 @@ const [aResume] = aField('resume_path')
 const [aSalary] = aField('expected_salary')
 
 const openAppCreate = () => { resetApp(); appDialog.value = true }
-const onCreateApp = handleApp(async (values) => {
-  appSaving.value = true
-  try {
-    await hrm.submitApplication(values)
-    toast.add({ severity: 'success', summary: t('hrm.recruitment.toast.applicationSubmitted'), life: 2000 })
-    appDialog.value = false
-    await refreshApps()
-  } catch (err: unknown) {
-    const data = (err as { data?: { message?: string } }).data
-    toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: data?.message, life: 5000 })
-  } finally {
-    appSaving.value = false
+const onCreateApp = handleApp(
+  async (values) => {
+    appSaving.value = true
+    try {
+      await hrm.submitApplication(values)
+      toast.add({ severity: 'success', summary: t('hrm.recruitment.toast.applicationSubmitted'), life: 2000 })
+      appDialog.value = false
+      await refreshApps()
+    } catch (err: unknown) {
+      const data = (err as { data?: { message?: string } }).data
+      toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: data?.message, life: 5000 })
+    } finally {
+      appSaving.value = false
+    }
+  },
+  ({ errors }) => {
+    const firstError = Object.entries(errors)[0]
+    if (firstError) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Form Validation Error',
+        detail: `${firstError[0]}: ${firstError[1]}`,
+        life: 5000,
+      })
+    }
   }
-})
+)
 
 // Transition dialog
 const transDialog = ref(false)
@@ -315,9 +354,26 @@ const intvMeta = computed(() => intvData.value?.data)
 
 const intvDialog = ref(false)
 const intvSaving = ref(false)
+
+const dateTimePreprocess = (val: unknown) => {
+  if (val instanceof Date) {
+    const year = val.getFullYear()
+    const month = String(val.getMonth() + 1).padStart(2, '0')
+    const day = String(val.getDate()).padStart(2, '0')
+    const hours = String(val.getHours()).padStart(2, '0')
+    const minutes = String(val.getMinutes()).padStart(2, '0')
+    const seconds = String(val.getSeconds()).padStart(2, '0')
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+  }
+  if (typeof val === 'string' && val.trim() !== '') {
+    return val
+  }
+  return null
+}
+
 const intvSchema = toTypedSchema(z.object({
   application_id: z.string().uuid(),
-  scheduled_at: z.string().min(1),
+  scheduled_at: z.preprocess(dateTimePreprocess, z.string().min(1, 'Scheduled date/time is required')),
   duration_minutes: z.coerce.number().min(5).max(480),
   mode: z.enum(['virtual', 'onsite', 'phone']),
   location: z.string().max(255).optional().or(z.literal('')),
@@ -339,20 +395,33 @@ const interviewModes = computed(() => (['virtual', 'onsite', 'phone'] as const).
 })))
 
 const openIntvCreate = () => { resetIntv(); intvDialog.value = true }
-const onCreateIntv = handleIntv(async (values) => {
-  intvSaving.value = true
-  try {
-    await hrm.createInterview(values)
-    toast.add({ severity: 'success', summary: t('hrm.recruitment.toast.interviewScheduled'), life: 2000 })
-    intvDialog.value = false
-    await refreshInterviews()
-  } catch (err: unknown) {
-    const data = (err as { data?: { message?: string } }).data
-    toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: data?.message, life: 5000 })
-  } finally {
-    intvSaving.value = false
+const onCreateIntv = handleIntv(
+  async (values) => {
+    intvSaving.value = true
+    try {
+      await hrm.createInterview(values)
+      toast.add({ severity: 'success', summary: t('hrm.recruitment.toast.interviewScheduled'), life: 2000 })
+      intvDialog.value = false
+      await refreshInterviews()
+    } catch (err: unknown) {
+      const data = (err as { data?: { message?: string } }).data
+      toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: data?.message, life: 5000 })
+    } finally {
+      intvSaving.value = false
+    }
+  },
+  ({ errors }) => {
+    const firstError = Object.entries(errors)[0]
+    if (firstError) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Form Validation Error',
+        detail: `${firstError[0]}: ${firstError[1]}`,
+        life: 5000,
+      })
+    }
   }
-})
+)
 const onDeleteIntv = (row: Interview) => {
   confirm.require({
     message: t('hrm.common.confirmDelete', { name: row.round_label ?? row.id }),
@@ -414,10 +483,10 @@ const onDeleteIntv = (row: Interview) => {
                   </template>
                 </Column>
                 <Column :header="t('hrm.recruitment.vacancies.columns.opens')">
-                  <template #body="{ data }"><span class="font-mono text-xs">{{ data.opens_at ?? t('common.dash') }}</span></template>
+                  <template #body="{ data }"><span class="font-mono text-xs">{{ formatDate(data.opens_at) }}</span></template>
                 </Column>
                 <Column :header="t('hrm.recruitment.vacancies.columns.closes')">
-                  <template #body="{ data }"><span class="font-mono text-xs">{{ data.closes_at ?? t('common.dash') }}</span></template>
+                  <template #body="{ data }"><span class="font-mono text-xs">{{ formatDate(data.closes_at) }}</span></template>
                 </Column>
                 <Column header="" body-class="text-right" :style="{ width: '140px' }">
                   <template #body="{ data }">
@@ -523,7 +592,7 @@ const onDeleteIntv = (row: Interview) => {
                 </Column>
                 <Column field="round_label" :header="t('hrm.recruitment.interviews.columns.round')" />
                 <Column :header="t('hrm.recruitment.interviews.columns.scheduled')">
-                  <template #body="{ data }"><span class="font-mono text-xs">{{ data.scheduled_at }}</span></template>
+                  <template #body="{ data }"><span class="font-mono text-xs">{{ formatDateTime(data.scheduled_at) }}</span></template>
                 </Column>
                 <Column :header="t('hrm.recruitment.interviews.columns.mode')">
                   <template #body="{ data }">
@@ -605,11 +674,11 @@ const onDeleteIntv = (row: Interview) => {
           </div>
           <div>
             <FormLabel :label="t('hrm.recruitment.vacancies.fields.opensAt')" />
-            <DatePicker v-model="vOpens" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
+            <DatePicker v-model="vOpens as any" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
           </div>
           <div>
             <FormLabel :label="t('hrm.recruitment.vacancies.fields.closesAt')" />
-            <DatePicker v-model="vCloses" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
+            <DatePicker v-model="vCloses as any" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
           </div>
         </div>
         <div>
@@ -693,7 +762,7 @@ const onDeleteIntv = (row: Interview) => {
         <div class="grid grid-cols-2 gap-4">
           <div>
             <FormLabel :label="t('hrm.recruitment.interviews.columns.scheduled')" required />
-            <DatePicker v-model="iSched" show-time hour-format="24" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.dateTime')" />
+            <DatePicker v-model="iSched as any" show-time hour-format="24" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.dateTime')" />
           </div>
           <div>
             <FormLabel :label="t('hrm.recruitment.placeholders.durationLabel')" required />

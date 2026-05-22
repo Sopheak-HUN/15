@@ -23,10 +23,24 @@ const cycles = computed<AppraisalCycle[]>(() => cycData.value?.data ?? [])
 const cycleDialog = ref(false)
 const editingCycle = ref<AppraisalCycle | null>(null)
 const cycleSaving = ref(false)
+
+const datePreprocess = (val: unknown) => {
+  if (val instanceof Date) {
+    const year = val.getFullYear()
+    const month = String(val.getMonth() + 1).padStart(2, '0')
+    const day = String(val.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  if (typeof val === 'string' && val.trim() !== '') {
+    return val.split('T')[0]
+  }
+  return null
+}
+
 const cycleSchema = toTypedSchema(z.object({
   name: z.string().min(2).max(120),
-  start_date: z.string().min(1),
-  end_date: z.string().min(1),
+  start_date: z.preprocess(datePreprocess, z.string().min(1, 'Start date is required')),
+  end_date: z.preprocess(datePreprocess, z.string().min(1, 'End date is required')),
   is_active: z.boolean(),
   rating_scale_json: z.string().optional().or(z.literal('')),
 }))
@@ -56,43 +70,56 @@ const openCycleEdit = (row: AppraisalCycle) => {
   })
   cycleDialog.value = true
 }
-const onSaveCycle = handleCycle(async (values) => {
-  cycleSaving.value = true
-  try {
-    let rating_scale: AppraisalCycle['rating_scale'] = null
-    if (values.rating_scale_json) {
-      try {
-        const parsed = JSON.parse(values.rating_scale_json)
-        if (Array.isArray(parsed)) rating_scale = parsed
-      } catch {
-        toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: 'Invalid JSON for rating scale.', life: 4000 })
-        cycleSaving.value = false
-        return
+const onSaveCycle = handleCycle(
+  async (values) => {
+    cycleSaving.value = true
+    try {
+      let rating_scale: AppraisalCycle['rating_scale'] = null
+      if (values.rating_scale_json) {
+        try {
+          const parsed = JSON.parse(values.rating_scale_json)
+          if (Array.isArray(parsed)) rating_scale = parsed
+        } catch {
+          toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: 'Invalid JSON for rating scale.', life: 4000 })
+          cycleSaving.value = false
+          return
+        }
       }
+      const payload = {
+        name: values.name,
+        start_date: values.start_date,
+        end_date: values.end_date,
+        is_active: values.is_active,
+        rating_scale,
+      }
+      if (editingCycle.value) {
+        await hrm.updateAppraisalCycle(editingCycle.value.id, payload)
+        toast.add({ severity: 'success', summary: t('hrm.performance.toast.cycleUpdated'), life: 2000 })
+      } else {
+        await hrm.createAppraisalCycle(payload)
+        toast.add({ severity: 'success', summary: t('hrm.performance.toast.cycleCreated'), life: 2000 })
+      }
+      cycleDialog.value = false
+      await refreshCycles()
+    } catch (err: unknown) {
+      const data = (err as { data?: { message?: string } }).data
+      toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: data?.message, life: 4000 })
+    } finally {
+      cycleSaving.value = false
     }
-    const payload = {
-      name: values.name,
-      start_date: values.start_date,
-      end_date: values.end_date,
-      is_active: values.is_active,
-      rating_scale,
+  },
+  ({ errors }) => {
+    const firstError = Object.entries(errors)[0]
+    if (firstError) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Form Validation Error',
+        detail: `${firstError[0]}: ${firstError[1]}`,
+        life: 5000,
+      })
     }
-    if (editingCycle.value) {
-      await hrm.updateAppraisalCycle(editingCycle.value.id, payload)
-      toast.add({ severity: 'success', summary: t('hrm.performance.toast.cycleUpdated'), life: 2000 })
-    } else {
-      await hrm.createAppraisalCycle(payload)
-      toast.add({ severity: 'success', summary: t('hrm.performance.toast.cycleCreated'), life: 2000 })
-    }
-    cycleDialog.value = false
-    await refreshCycles()
-  } catch (err: unknown) {
-    const data = (err as { data?: { message?: string } }).data
-    toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: data?.message, life: 4000 })
-  } finally {
-    cycleSaving.value = false
   }
-})
+)
 const onDeleteCycle = (row: AppraisalCycle) => {
   confirm.require({
     message: t('hrm.common.confirmDelete', { name: row.name }),
@@ -141,25 +168,38 @@ const [apReviewer] = apField('reviewer_id')
 const [apComments] = apField('employee_comments')
 
 const openApprCreate = () => { resetAppr(); apprDialog.value = true }
-const onCreateAppr = handleAppr(async (values) => {
-  apprSaving.value = true
-  try {
-    await hrm.createAppraisal({
-      cycle_id: values.cycle_id,
-      employee_id: values.employee_id,
-      reviewer_id: values.reviewer_id ?? null,
-      employee_comments: values.employee_comments || undefined,
-    })
-    toast.add({ severity: 'success', summary: t('hrm.performance.toast.appraisalCreated'), life: 2000 })
-    apprDialog.value = false
-    await refreshAppraisals()
-  } catch (err: unknown) {
-    const data = (err as { data?: { message?: string } }).data
-    toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: data?.message, life: 5000 })
-  } finally {
-    apprSaving.value = false
+const onCreateAppr = handleAppr(
+  async (values) => {
+    apprSaving.value = true
+    try {
+      await hrm.createAppraisal({
+        cycle_id: values.cycle_id,
+        employee_id: values.employee_id,
+        reviewer_id: values.reviewer_id ?? null,
+        employee_comments: values.employee_comments || undefined,
+      })
+      toast.add({ severity: 'success', summary: t('hrm.performance.toast.appraisalCreated'), life: 2000 })
+      apprDialog.value = false
+      await refreshAppraisals()
+    } catch (err: unknown) {
+      const data = (err as { data?: { message?: string } }).data
+      toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: data?.message, life: 5000 })
+    } finally {
+      apprSaving.value = false
+    }
+  },
+  ({ errors }) => {
+    const firstError = Object.entries(errors)[0]
+    if (firstError) {
+      toast.add({
+        severity: 'warn',
+        summary: 'Form Validation Error',
+        detail: `${firstError[0]}: ${firstError[1]}`,
+        life: 5000,
+      })
+    }
   }
-})
+)
 
 // Review dialog
 const reviewDialog = ref(false)
@@ -239,10 +279,10 @@ const apprSeverity = (s: string) => s === 'closed' ? 'success' : s === 'draft' ?
                 </template>
                 <Column field="name" :header="t('hrm.performance.cycles.columns.name')" />
                 <Column :header="t('hrm.performance.cycles.columns.start')">
-                  <template #body="{ data }"><span class="font-mono text-xs">{{ data.start_date }}</span></template>
+                  <template #body="{ data }"><span class="font-mono text-xs">{{ formatDate(data.start_date) }}</span></template>
                 </Column>
                 <Column :header="t('hrm.performance.cycles.columns.end')">
-                  <template #body="{ data }"><span class="font-mono text-xs">{{ data.end_date }}</span></template>
+                  <template #body="{ data }"><span class="font-mono text-xs">{{ formatDate(data.end_date) }}</span></template>
                 </Column>
                 <Column :header="t('hrm.performance.cycles.columns.active')">
                   <template #body="{ data }">
@@ -320,11 +360,11 @@ const apprSeverity = (s: string) => s === 'closed' ? 'success' : s === 'draft' ?
         <div class="grid grid-cols-2 gap-4">
           <div>
             <FormLabel :label="t('hrm.performance.cycles.fields.startDate')" required />
-            <DatePicker v-model="cyStart" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
+            <DatePicker v-model="cyStart as any" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
           </div>
           <div>
             <FormLabel :label="t('hrm.performance.cycles.fields.endDate')" required />
-            <DatePicker v-model="cyEnd" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
+            <DatePicker v-model="cyEnd as any" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
           </div>
         </div>
         <div>

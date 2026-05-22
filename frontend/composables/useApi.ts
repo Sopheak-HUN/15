@@ -40,7 +40,7 @@ export function useApi() {
       return await $fetch<T>(url, {
         baseURL: config.public.apiBase,
         headers: merged,
-        ...rest,
+        ...(rest as any),
       })
     } catch (err: unknown) {
       if (
@@ -56,9 +56,9 @@ export function useApi() {
 
   return {
     get:  <T>(url: string, options?: ApiOptions) => request<T>(url, { ...options, method: 'GET' }),
-    post: <T>(url: string, body?: unknown, options?: ApiOptions) =>
+    post: <T>(url: string, body?: any, options?: ApiOptions) =>
       request<T>(url, { ...options, method: 'POST', body }),
-    put:  <T>(url: string, body?: unknown, options?: ApiOptions) =>
+    put:  <T>(url: string, body?: any, options?: ApiOptions) =>
       request<T>(url, { ...options, method: 'PUT', body }),
     del:  <T>(url: string, options?: ApiOptions) => request<T>(url, { ...options, method: 'DELETE' }),
     raw:  request,

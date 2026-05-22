@@ -83,6 +83,16 @@ const onSaveComp = handleComp(async (values) => {
   } finally {
     compSaving.value = false
   }
+}, ({ errors }) => {
+  const firstError = Object.entries(errors)[0]
+  if (firstError) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Form Validation Error',
+      detail: `${firstError[0]}: ${firstError[1]}`,
+      life: 5000,
+    })
+  }
 })
 const onDeleteComp = (row: PayComponent) => {
   confirm.require({
@@ -110,9 +120,23 @@ const periodMeta = computed(() => periodsData.value?.data)
 
 const periodDialog = ref(false)
 const periodSaving = ref(false)
+
+const datePreprocess = (val: unknown) => {
+  if (val instanceof Date) {
+    const year = val.getFullYear()
+    const month = String(val.getMonth() + 1).padStart(2, '0')
+    const day = String(val.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  if (typeof val === 'string' && val.trim() !== '') {
+    return val.split('T')[0]
+  }
+  return null
+}
+
 const periodSchema = toTypedSchema(z.object({
-  start_date: z.string().min(1),
-  end_date: z.string().min(1),
+  start_date: z.preprocess(datePreprocess, z.string().min(1, 'Start date is required')),
+  end_date: z.preprocess(datePreprocess, z.string().min(1, 'End date is required')),
   label: z.string().max(80).optional().or(z.literal('')),
 }))
 const { defineField: pField, handleSubmit: handlePeriod, errors: pErrors, resetForm: resetPeriod } = useForm({
@@ -140,6 +164,16 @@ const onCreatePeriod = handlePeriod(async (values) => {
     toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: data?.message, life: 4000 })
   } finally {
     periodSaving.value = false
+  }
+}, ({ errors }) => {
+  const firstError = Object.entries(errors)[0]
+  if (firstError) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Form Validation Error',
+      detail: `${firstError[0]}: ${firstError[1]}`,
+      life: 5000,
+    })
   }
 })
 
@@ -216,11 +250,11 @@ const periodStatusSeverity = (s: string) => s === 'closed' ? 'success' : 'warn'
                   <div class="py-10 text-center text-surface-500">{{ t('hrm.payroll.periods.empty') }}</div>
                 </template>
                 <Column field="label" :header="t('hrm.payroll.periods.columns.label')" />
-                <Column :header="t('hrm.payroll.periods.columns.startDate')">
-                  <template #body="{ data }"><span class="font-mono text-xs">{{ data.start_date }}</span></template>
+                 <Column :header="t('hrm.payroll.periods.columns.startDate')">
+                  <template #body="{ data }"><span class="font-mono text-xs">{{ formatDate(data.start_date) }}</span></template>
                 </Column>
                 <Column :header="t('hrm.payroll.periods.columns.endDate')">
-                  <template #body="{ data }"><span class="font-mono text-xs">{{ data.end_date }}</span></template>
+                  <template #body="{ data }"><span class="font-mono text-xs">{{ formatDate(data.end_date) }}</span></template>
                 </Column>
                 <Column :header="t('hrm.payroll.periods.columns.status')">
                   <template #body="{ data }">
@@ -229,7 +263,7 @@ const periodStatusSeverity = (s: string) => s === 'closed' ? 'success' : 'warn'
                 </Column>
                 <Column :header="t('hrm.payroll.periods.columns.processedAt')">
                   <template #body="{ data }">
-                    <span v-if="data.processed_at" class="text-xs text-surface-500">{{ data.processed_at }}</span>
+                    <span v-if="data.processed_at" class="text-xs text-surface-500">{{ formatDateTime(data.processed_at) }}</span>
                     <span v-else class="text-surface-400">{{ t('common.dash') }}</span>
                   </template>
                 </Column>
@@ -422,11 +456,11 @@ const periodStatusSeverity = (s: string) => s === 'closed' ? 'success' : 'warn'
         <div class="grid grid-cols-2 gap-4">
           <div>
             <FormLabel :label="t('hrm.payroll.periods.fields.startDate')" required />
-            <DatePicker v-model="pStart" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
+            <DatePicker v-model="pStart as any" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
           </div>
           <div>
             <FormLabel :label="t('hrm.payroll.periods.fields.endDate')" required />
-            <DatePicker v-model="pEnd" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
+            <DatePicker v-model="pEnd as any" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
           </div>
         </div>
         <div>

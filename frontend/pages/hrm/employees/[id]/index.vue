@@ -22,6 +22,30 @@ const { data: empData, pending: empPending } = await useAsyncData(
 )
 const employee = computed<Employee | null>(() => empData.value?.data ?? null)
 
+// ----- Date conversion helpers -----
+const datePreprocess = (val: unknown) => {
+  if (val instanceof Date) {
+    const year = val.getFullYear()
+    const month = String(val.getMonth() + 1).padStart(2, '0')
+    const day = String(val.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  if (typeof val === 'string' && val.trim() !== '') {
+    return val.split('T')[0]
+  }
+  return null
+}
+
+const parseDate = (dStr: string | null | undefined) => {
+  if (!dStr) return null
+  const clean = dStr.split('T')[0] || ''
+  const parts = clean.split('-')
+  if (parts.length === 3) {
+    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
+  }
+  return new Date(clean)
+}
+
 // ----- Notes -----
 const categoryFilter = ref<string | null>(null)
 const { data: notesData, refresh: refreshNotes, pending: notesPending } = await useAsyncData(
@@ -40,11 +64,11 @@ const noteSchema = toTypedSchema(z.object({
   body: z.string().min(1),
   is_private: z.boolean(),
   is_disciplinary: z.boolean(),
-  incident_date: z.string().optional().or(z.literal('')),
+  incident_date: z.preprocess(datePreprocess, z.string().nullable().optional()),
 }))
 const { defineField: nField, handleSubmit: handleNote, errors: nErrors, resetForm: resetNote, setValues: setNote } = useForm({
   validationSchema: noteSchema,
-  initialValues: { category: 'general', title: '', body: '', is_private: true, is_disciplinary: false, incident_date: '' },
+  initialValues: { category: 'general', title: '', body: '', is_private: true, is_disciplinary: false, incident_date: null },
 })
 const [nCategory] = nField('category')
 const [nTitle] = nField('title')
@@ -70,7 +94,7 @@ const openNoteEdit = (row: EmployeeNote) => {
     body: row.body,
     is_private: row.is_private,
     is_disciplinary: row.is_disciplinary,
-    incident_date: row.incident_date ?? '',
+    incident_date: parseDate(row.incident_date),
   })
   noteDialog.value = true
 }
@@ -79,10 +103,25 @@ const onSaveNote = handleNote(async (values) => {
   try {
     const payload = { ...values, employee_id: employeeId }
     if (editingNote.value) {
-      await hrm.updateEmployeeNote(editingNote.value.id, values)
+      await hrm.updateEmployeeNote(editingNote.value.id, {
+        category: values.category,
+        title: values.title || undefined,
+        body: values.body,
+        is_private: values.is_private,
+        is_disciplinary: values.is_disciplinary,
+        incident_date: values.incident_date || undefined,
+      })
       toast.add({ severity: 'success', summary: t('hrm.notes.toast.noteUpdated'), life: 2000 })
     } else {
-      await hrm.createEmployeeNote(payload)
+      await hrm.createEmployeeNote({
+        employee_id: employeeId,
+        category: values.category,
+        title: values.title || undefined,
+        body: values.body,
+        is_private: values.is_private,
+        is_disciplinary: values.is_disciplinary,
+        incident_date: values.incident_date || undefined,
+      })
       toast.add({ severity: 'success', summary: t('hrm.notes.toast.noteCreated'), life: 2000 })
     }
     noteDialog.value = false
@@ -92,6 +131,16 @@ const onSaveNote = handleNote(async (values) => {
     toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: data?.message, life: 5000 })
   } finally {
     noteSaving.value = false
+  }
+}, ({ errors }) => {
+  const firstError = Object.entries(errors)[0]
+  if (firstError) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Form Validation Error',
+      detail: `${firstError[0]}: ${firstError[1]}`,
+      life: 5000,
+    })
   }
 })
 const onDeleteNote = (row: EmployeeNote) => {
@@ -124,12 +173,12 @@ const docSchema = toTypedSchema(z.object({
   file_path: z.string().min(1).max(500),
   mime_type: z.string().max(128).optional().or(z.literal('')),
   size_bytes: z.coerce.number().min(0).nullable().optional(),
-  issued_at: z.string().optional().or(z.literal('')),
-  expires_at: z.string().optional().or(z.literal('')),
+  issued_at: z.preprocess(datePreprocess, z.string().nullable().optional()),
+  expires_at: z.preprocess(datePreprocess, z.string().nullable().optional()),
 }))
 const { defineField: dField, handleSubmit: handleDoc, errors: dErrors, resetForm: resetDoc } = useForm({
   validationSchema: docSchema,
-  initialValues: { title: '', category: 'contract', file_path: '', mime_type: '', size_bytes: null, issued_at: '', expires_at: '' },
+  initialValues: { title: '', category: 'contract', file_path: '', mime_type: '', size_bytes: null, issued_at: null, expires_at: null },
 })
 const [dTitle] = dField('title')
 const [dCategory] = dField('category')
@@ -147,7 +196,16 @@ const openDocCreate = () => { resetDoc(); docDialog.value = true }
 const onCreateDoc = handleDoc(async (values) => {
   docSaving.value = true
   try {
-    await hrm.createEmployeeDocument({ ...values, employee_id: employeeId })
+    await hrm.createEmployeeDocument({
+      employee_id: employeeId,
+      title: values.title,
+      category: values.category,
+      file_path: values.file_path,
+      mime_type: values.mime_type || undefined,
+      size_bytes: values.size_bytes ?? undefined,
+      issued_at: values.issued_at || undefined,
+      expires_at: values.expires_at || undefined,
+    })
     toast.add({ severity: 'success', summary: t('hrm.notes.toast.docCreated'), life: 2000 })
     docDialog.value = false
     await refreshDocs()
@@ -156,6 +214,16 @@ const onCreateDoc = handleDoc(async (values) => {
     toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: data?.message, life: 5000 })
   } finally {
     docSaving.value = false
+  }
+}, ({ errors }) => {
+  const firstError = Object.entries(errors)[0]
+  if (firstError) {
+    toast.add({
+      severity: 'warn',
+      summary: 'Form Validation Error',
+      detail: `${firstError[0]}: ${firstError[1]}`,
+      life: 5000,
+    })
   }
 })
 const onDeleteDoc = (row: EmployeeDocument) => {
@@ -246,7 +314,7 @@ const balances = computed<LeaveBalance[]>(() => balData.value?.data ?? [])
                   </Column>
                   <Column :header="t('hrm.notes.notes.fields.incidentDate')">
                     <template #body="{ data }">
-                      <span class="font-mono text-xs">{{ data.incident_date ?? t('common.dash') }}</span>
+                      <span class="font-mono text-xs">{{ formatDate(data.incident_date) }}</span>
                     </template>
                   </Column>
                   <Column header="" body-class="text-right" :style="{ width: '140px' }">
@@ -288,12 +356,12 @@ const balances = computed<LeaveBalance[]>(() => balData.value?.data ?? [])
                   </Column>
                   <Column :header="t('hrm.notes.documents.fields.issuedAt')">
                     <template #body="{ data }">
-                      <span class="font-mono text-xs">{{ data.issued_at ?? t('common.dash') }}</span>
+                      <span class="font-mono text-xs">{{ formatDate(data.issued_at) }}</span>
                     </template>
                   </Column>
                   <Column :header="t('hrm.notes.documents.fields.expiresAt')">
                     <template #body="{ data }">
-                      <span class="font-mono text-xs">{{ data.expires_at ?? t('common.dash') }}</span>
+                      <span class="font-mono text-xs">{{ formatDate(data.expires_at) }}</span>
                     </template>
                   </Column>
                   <Column header="" body-class="text-right" :style="{ width: '100px' }">
@@ -351,7 +419,7 @@ const balances = computed<LeaveBalance[]>(() => balData.value?.data ?? [])
         </div>
         <div>
           <FormLabel :label="t('hrm.notes.notes.fields.incidentDate')" />
-          <DatePicker v-model="nDate" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
+          <DatePicker v-model="nDate as any" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
         </div>
         <div class="flex gap-6">
           <div class="flex items-center gap-2">
@@ -399,11 +467,11 @@ const balances = computed<LeaveBalance[]>(() => balData.value?.data ?? [])
         <div class="grid grid-cols-2 gap-4">
           <div>
             <FormLabel :label="t('hrm.notes.documents.fields.issuedAt')" />
-            <DatePicker v-model="dIssued" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
+            <DatePicker v-model="dIssued as any" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
           </div>
           <div>
             <FormLabel :label="t('hrm.notes.documents.fields.expiresAt')" />
-            <DatePicker v-model="dExpires" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
+            <DatePicker v-model="dExpires as any" date-format="yy-mm-dd" class="w-full" :placeholder="t('common.placeholders.date')" />
           </div>
         </div>
         <div class="flex justify-end gap-2 pt-2">
