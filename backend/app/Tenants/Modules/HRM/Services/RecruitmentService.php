@@ -155,13 +155,19 @@ class RecruitmentService
     /**
      * Auto-issue the next `<prefix>-<NNNN>` employee_id. Zero-indexed: first
      * issued id is `TT-0000`. Past `TT-9999`, width widens automatically.
+     *
+     * Soft-deleted (terminated) employees are INCLUDED in the max query —
+     * the unique index on `employee_id` is full, not partial, so reused IDs
+     * would collide on insert. Recycling a former employee's ID would also
+     * confuse audit trails, so we just keep counting up.
      */
     public function generateNextEmployeeId(): string
     {
         $prefix = self::EMPLOYEE_ID_PREFIX;
         $pad    = self::EMPLOYEE_ID_PAD;
 
-        $max = Employee::where('employee_id', 'like', "{$prefix}-%")
+        $max = Employee::withTrashed()
+            ->where('employee_id', 'like', "{$prefix}-%")
             ->selectRaw("MAX(CAST(SUBSTRING(employee_id FROM '^{$prefix}-(\\d+)$') AS INTEGER)) AS n")
             ->value('n');
 

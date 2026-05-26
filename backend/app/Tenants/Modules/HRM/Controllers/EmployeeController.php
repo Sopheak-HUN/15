@@ -41,7 +41,12 @@ class EmployeeController extends Controller
     public function show(Employee $employee)
     {
         return response()->json([
-            'data' => $employee->load(['department', 'position', 'manager:id,first_name,last_name', 'user:id,email,handle']),
+            'data' => $employee->load([
+                'department', 'position',
+                'manager:id,first_name,last_name', 'user:id,email,handle',
+                'currentAddress', 'permanentAddress', 'emergencyAddress',
+                'spouse', 'emergencyContact', 'educations', 'activeContract', 'contracts',
+            ]),
         ]);
     }
 
@@ -99,16 +104,44 @@ class EmployeeController extends Controller
             'employee_id'      => 'sometimes|nullable|string|max:32|unique:employees,employee_id' . ($employee ? ',' . $employee->id : ''),
             'first_name'       => ($employee ? 'sometimes' : 'required') . '|string|max:80',
             'last_name'        => ($employee ? 'sometimes' : 'required') . '|string|max:80',
+            'first_name_kh'    => 'nullable|string|max:120',
+            'last_name_kh'     => 'nullable|string|max:120',
             'email'            => $employee ? str_replace('required', 'sometimes', $emailRule) : $emailRule,
             'phone'            => 'nullable|string|max:32',
+            'office_phone'     => 'nullable|string|max:32',
+            'contact_phone'    => 'nullable|string|max:32',
             'date_of_birth'    => 'nullable|date|before:today',
             'gender'           => 'nullable|in:male,female,other,prefer_not_to_say',
+            'nationality'      => 'nullable|string|max:64',
             'national_id'      => 'nullable|string|max:64',
             'bank_account'     => 'nullable|string|max:64',
             'tax_id'           => 'nullable|string|max:64',
+            'nssf_id'          => 'nullable|string|max:64',
+            'role_name'        => 'nullable|string|max:120',
+
+            // Identification document (the wizard's "Type of ID" block).
+            'identification_type' => 'nullable|in:national_id,passport,drivers_license,family_book,other',
+            'id_card_number'      => 'nullable|string|max:64',
+            'id_issued_date'      => 'nullable|date',
+            'id_issued_by'        => 'nullable|string|max:160',
+            'id_issued_place'     => 'nullable|string|max:160',
+
+            // Personal
+            'religion'         => 'nullable|in:buddhism,christianity,islam,hinduism,other',
+            'marital_status'   => 'nullable|in:single,married,divorced,widowed,separated',
+            'blood_group'      => 'nullable|string|max:8',
+            'children_count'   => 'nullable|integer|min:0|max:32',
+
+            // Legacy flat address (still accepted for callers that don't use the cascade)
             'address'          => 'nullable|string|max:255',
             'city'             => 'nullable|string|max:120',
             'country'          => 'nullable|string|max:64',
+
+            // Object-storage key returned by POST /api/uploads/employee-photo.
+            // Must live under the `uploads/` prefix — EmployeeService refuses
+            // any other prefix to prevent forged-key copy-from abuse.
+            'photo_temp_key'   => 'nullable|string|max:255|starts_with:uploads/',
+
             'department_id'    => 'nullable|uuid|exists:departments,id',
             'position_id'      => 'nullable|uuid|exists:positions,id',
             'manager_id'       => 'nullable|uuid|exists:employees,id',
@@ -119,6 +152,67 @@ class EmployeeController extends Controller
             'base_salary'      => 'nullable|numeric|min:0',
             'currency'         => 'nullable|string|size:3',
             'pay_frequency'    => 'nullable|in:weekly,biweekly,monthly',
+
+            // Nested wizard sub-payloads. Each block is optional; the service
+            // skips creating a row when the block is missing or all-empty.
+            'current_address'                  => 'nullable|array',
+            'current_address.home_number'      => 'nullable|string|max:64',
+            'current_address.street'           => 'nullable|string|max:255',
+            'current_address.province_code'    => 'nullable|string|max:16',
+            'current_address.district_code'    => 'nullable|string|max:16',
+            'current_address.commune_code'     => 'nullable|string|max:16',
+            'current_address.village_code'     => 'nullable|string|max:16',
+            'current_address.group'            => 'nullable|string|max:32',
+            'current_address.lat'              => 'nullable|numeric|between:-90,90',
+            'current_address.lng'              => 'nullable|numeric|between:-180,180',
+
+            'permanent_address'                => 'nullable|array',
+            'permanent_address.home_number'    => 'nullable|string|max:64',
+            'permanent_address.street'         => 'nullable|string|max:255',
+            'permanent_address.province_code'  => 'nullable|string|max:16',
+            'permanent_address.district_code'  => 'nullable|string|max:16',
+            'permanent_address.commune_code'   => 'nullable|string|max:16',
+            'permanent_address.village_code'   => 'nullable|string|max:16',
+            'permanent_address.group'          => 'nullable|string|max:32',
+            'permanent_address.lat'            => 'nullable|numeric|between:-90,90',
+            'permanent_address.lng'            => 'nullable|numeric|between:-180,180',
+
+            'emergency_address'                => 'nullable|array',
+            'emergency_address.home_number'    => 'nullable|string|max:64',
+            'emergency_address.street'         => 'nullable|string|max:255',
+            'emergency_address.province_code'  => 'nullable|string|max:16',
+            'emergency_address.district_code'  => 'nullable|string|max:16',
+            'emergency_address.commune_code'   => 'nullable|string|max:16',
+            'emergency_address.village_code'   => 'nullable|string|max:16',
+            'emergency_address.group'          => 'nullable|string|max:32',
+            'emergency_address.lat'            => 'nullable|numeric|between:-90,90',
+            'emergency_address.lng'            => 'nullable|numeric|between:-180,180',
+
+            'spouse'                  => 'nullable|array',
+            'spouse.name'             => 'nullable|string|max:160',
+            'spouse.date_of_birth'    => 'nullable|date',
+            'spouse.education'        => 'nullable|string|max:32',
+            'spouse.occupation'       => 'nullable|string|max:160',
+
+            'emergency_contact'                    => 'nullable|array',
+            'emergency_contact.father_name'        => 'nullable|string|max:160',
+            'emergency_contact.father_occupation'  => 'nullable|string|max:160',
+            'emergency_contact.mother_name'        => 'nullable|string|max:160',
+            'emergency_contact.mother_occupation'  => 'nullable|string|max:160',
+            'emergency_contact.phone_number'       => 'nullable|string|max:32',
+            'emergency_contact.home_phone'         => 'nullable|string|max:32',
+
+            'educations'                       => 'nullable|array',
+            'educations.*.level'               => 'nullable|string|max:32',
+            'educations.*.major_subject'       => 'nullable|string|max:160',
+            'educations.*.status'              => 'nullable|string|max:32',
+            'educations.*.university_school'   => 'nullable|string|max:200',
+
+            'contract'              => 'nullable|array',
+            'contract.type'         => 'nullable|in:work,fdc,udc,probation,internship,consulting',
+            'contract.start_date'   => 'nullable|date',
+            'contract.end_date'     => 'nullable|date|after_or_equal:contract.start_date',
+            'contract.comment'      => 'nullable|string|max:2000',
         ];
     }
 }

@@ -154,10 +154,164 @@ shared Cambodia geo composable (see `.task/geo/task.md`).
   root container switched from `min-h-screen` to `h-screen overflow-hidden`
   so the sidebar and topbar stay pinned and only the `<main>` scrolls.
 
-### Frontend submit handler — STILL A PLACEHOLDER
+### Frontend submit handler — WIRED to `POST /api/hrm/employees`
 
-`onSubmit` in `create.vue` currently just toasts and `console.log`s the
-gathered payload. Backend `POST /api/employees` payload mapping has NOT
-been wired — when ready, replace the toast block with a real
-`hrm.createEmployee(payload)` call. The cross-step validation jump-back
-will keep working.
+`onSubmit` in [create.vue](../../frontend/pages/hrm/employees/create.vue)
+now calls `hrm.createEmployee(payload)`, toasts on success, and redirects
+to `/hrm/employees`. The button drives `:loading="isSubmitting"`.
+
+**Payload mapping** (wizard field → backend column):
+
+| Backend (`employees` table) | Wizard field |
+|---|---|
+| `first_name`, `last_name`, `email`, `phone` | same |
+| `date_of_birth`, `gender`, `bank_account` | same |
+| `national_id` | `id_card_number` (only when `identification_type === 'national_id'`) |
+| `address` | `home_number, street, village, commune` joined with `, ` |
+| `city` | province name (looked up from the loaded `provinces` ref) |
+| `country` | hard-coded `'Cambodia'` |
+| `department_id`, `position_id` | same |
+| `hire_date` | `joined_date` |
+| `base_salary` | `salary` |
+| `employment_type` | derived from `contract_type` via `employmentTypeFromContract()` (internship → intern, fdc/consulting → contract, else full_time) |
+
+**Server-error handling.** On Laravel 422 the handler reads
+`err.data.errors`, maps each server field back to its wizard step via
+`SERVER_FIELD_TO_WIZARD`, and jumps to the earliest step that owns one of
+those fields. The first error message is shown in an error toast. Aliases
+in the map: `hire_date → joined_date`, `base_salary → salary`,
+`national_id → id_card_number`, `address → home_number`, `city → province_id`.
+
+### Schema integration shipped — wizard fully persisted (2026-05-26)
+
+The wizard's full nested payload is now persisted. Six new tenant migrations
+ship the schema:
+
+| Migration | Tables / changes |
+| --- | --- |
+| [2026_05_26_160000_extend_employees_for_wizard.php](../../backend/database/migrations/tenant/2026_05_26_160000_extend_employees_for_wizard.php) | Widens `employees` with `first_name_kh`, `last_name_kh`, `nssf_id`, `role_name`, `office_phone`, `contact_phone`, `nationality`, `religion`, `marital_status`, `blood_group`, `children_count`, `identification_type`, `id_card_number` (encrypted), `id_issued_date/by/place` |
+| [2026_05_26_160100_create_employee_addresses_table.php](../../backend/database/migrations/tenant/2026_05_26_160100_create_employee_addresses_table.php) | `employee_addresses` — `type ∈ {current, permanent, emergency}`, raw MEF codes for province/district/commune/village, optional `group`, `lat`, `lng`. Unique on `(employee_id, type)` |
+| [2026_05_26_160200_create_employee_spouses_table.php](../../backend/database/migrations/tenant/2026_05_26_160200_create_employee_spouses_table.php) | `employee_spouses` (1:1) — name, DOB, education, occupation |
+| [2026_05_26_160300_create_employee_emergency_contacts_table.php](../../backend/database/migrations/tenant/2026_05_26_160300_create_employee_emergency_contacts_table.php) | `employee_emergency_contacts` (1:1) — father/mother name+occupation, phone, home_phone. The address lives in `employee_addresses` with `type='emergency'` |
+| [2026_05_26_160400_create_employee_educations_table.php](../../backend/database/migrations/tenant/2026_05_26_160400_create_employee_educations_table.php) | `employee_educations` (1:N) — level, major_subject, status, university_school |
+| [2026_05_26_160500_create_employee_contracts_table.php](../../backend/database/migrations/tenant/2026_05_26_160500_create_employee_contracts_table.php) | `employee_contracts` (1:N) — type, start/end_date, comment, status (`active`/`expired`/`terminated`). Wizard seeds one row with `status='active'` |
+
+**Models**: [EmployeeAddress](../../backend/app/Tenants/Modules/HRM/Models/EmployeeAddress.php), [EmployeeSpouse](../../backend/app/Tenants/Modules/HRM/Models/EmployeeSpouse.php), [EmployeeEmergencyContact](../../backend/app/Tenants/Modules/HRM/Models/EmployeeEmergencyContact.php), [EmployeeEducation](../../backend/app/Tenants/Modules/HRM/Models/EmployeeEducation.php), [EmployeeContract](../../backend/app/Tenants/Modules/HRM/Models/EmployeeContract.php). 1:1 models use `employee_id` as primary key (no separate UUID); 1:N models use `HasUuids`. `Employee` gains relations: `addresses`, `currentAddress/permanentAddress/emergencyAddress` (filtered HasOne), `spouse`, `emergencyContact`, `educations`, `contracts`, `activeContract`.
+
+**Service**: [EmployeeService::create](../../backend/app/Tenants/Modules/HRM/Services/EmployeeService.php) now accepts a nested payload — carves off `current_address`, `permanent_address`, `emergency_address`, `spouse`, `emergency_contact`, `educations[]`, `contract`, then creates the employee + each related row in a single `DB::transaction`. The `hasAny()` helper skips creating empty sub-rows (so the user can leave optional sections blank without inserting placeholder rows). `EMPLOYEE_COLUMNS` allowlists which top-level keys go to `Employee::create()`; everything else is ignored at that layer.
+
+**Controller**: [EmployeeController](../../backend/app/Tenants/Modules/HRM/Controllers/EmployeeController.php) `rules()` extended with all top-level columns + dotted-path validation for each nested block (e.g. `current_address.province_code` ⇒ `nullable|string|max:16`, `contract.end_date` ⇒ `after_or_equal:contract.start_date`). `show()` now eager-loads `currentAddress`, `permanentAddress`, `emergencyAddress`, `spouse`, `emergencyContact`, `educations`, `activeContract`, `contracts`.
+
+**Frontend**: [create.vue:onSubmit](../../frontend/pages/hrm/employees/create.vue) builds the nested payload directly — `current_address`, `permanent_address`, `emergency_address` each carry the raw MEF codes (since `useCambodiaGeo` returns `code` as `id`, the wizard's `province_id` values ARE the codes). The dotted-path `SERVER_FIELD_TO_WIZARD` map routes 422 errors back to the wizard fields so `current_address.village_code` correctly jumps to step 2.
+
+**Bring it up on a fresh machine**:
+
+```bash
+cd backend
+docker compose exec app php artisan tenants:migrate
+```
+
+### Photo upload — MinIO integration shipped (2026-05-26)
+
+The wizard now uploads the employee photo to MinIO via a presigned PUT
+flow. Laravel never streams the file bytes.
+
+**Architecture**
+
+```
+ Browser                  Laravel                    MinIO (S3 API)
+ ───────                  ───────                    ──────────────
+  POST /api/uploads/employee-photo ──► UploadController::employeePhoto
+                                       │
+                                       │ S3UploadService::signEmployeePhotoPut()
+                                       │   public client → http://localhost:9000
+                                       ◄── { upload_url, key }
+  PUT upload_url (Content-Type: image/jpeg, body: File)
+                                                  ──► PutObject uploads/{nanoid}.jpg
+  POST /api/hrm/employees { photo_temp_key, ... } ──► EmployeeController::store
+                                       │
+                                       │ EmployeeService::create()
+                                       │ (DB::transaction creates rows)
+                                       │ ↓ after commit
+                                       │ S3UploadService::commitObject()
+                                       │   internal client → http://minio:9000
+                                       │   CopyObject  uploads/x.jpg → tenants/{h}/employees/{uuid}/photo.jpg
+                                       │   DeleteObject uploads/x.jpg
+                                       │ ↓
+                                       │ employees.photo_path ← final key
+  GET /api/hrm/employees/{id}        ──► photo_url accessor → S3UploadService::signGet (5-min TTL)
+                                       ◄── { ..., photo_url: 'http://localhost:9000/erp-uploads/...' }
+  <img :src="photo_url">             ──────────────────────► GetObject tenants/{h}/...
+```
+
+**Why two S3 clients** ([S3UploadService.php](../../backend/app/Services/S3UploadService.php))
+
+The signing endpoint stamped into the presigned URL has to be the host
+the **browser** can reach (`http://localhost:9000`), but actual Laravel
+↔ MinIO traffic happens over the Docker network (`http://minio:9000`).
+The default `Storage::disk('s3')` uses `AWS_ENDPOINT` for everything, so
+the service builds a second `S3Client` pointed at `AWS_PUBLIC_ENDPOINT`
+exclusively for `createPresignedRequest()`. Commit ops (copy / delete /
+get) keep using the default disk.
+
+**Files shipped**
+
+| File | Purpose |
+| --- | --- |
+| [docker-compose.yml](../../docker-compose.yml) | New `minio` service (ports 9000/9001) + `minio-init` (creates `erp-uploads` bucket and a 1-day lifecycle rule on the `uploads/` prefix) + S3 env vars on `app` + `queue` |
+| [backend/.env.example](../../backend/.env.example) | Documented `AWS_*` + `AWS_PUBLIC_ENDPOINT` |
+| [backend/composer.json](../../backend/composer.json) | `league/flysystem-aws-s3-v3 ^3.29` |
+| [backend/config/filesystems.php](../../backend/config/filesystems.php) | `s3` disk gains a `public_endpoint` config key (reads `AWS_PUBLIC_ENDPOINT`) |
+| [2026_05_26_160600_add_photo_to_employees.php](../../backend/database/migrations/tenant/2026_05_26_160600_add_photo_to_employees.php) | `employees.photo_path` (nullable string) |
+| [backend/app/Services/S3UploadService.php](../../backend/app/Services/S3UploadService.php) | `signEmployeePhotoPut`, `signGet`, `commitObject(temp, final)`, `delete` |
+| [backend/app/Http/Controllers/UploadController.php](../../backend/app/Http/Controllers/UploadController.php) | `POST /api/uploads/employee-photo` |
+| [backend/routes/tenant.php](../../backend/routes/tenant.php) | Route registered inside the `auth:api` + tenant-scope group |
+| [backend/app/Tenants/Modules/HRM/Models/Employee.php](../../backend/app/Tenants/Modules/HRM/Models/Employee.php) | `photo_url` accessor (5-min presigned GET, cached per request), appended to JSON |
+| [backend/app/Tenants/Modules/HRM/Services/EmployeeService.php](../../backend/app/Tenants/Modules/HRM/Services/EmployeeService.php) | `create()` commits the temp key **after** the DB transaction succeeds; `photo_path` is OUT of `EMPLOYEE_COLUMNS` so callers can't inject arbitrary keys |
+| [backend/app/Tenants/Modules/HRM/Controllers/EmployeeController.php](../../backend/app/Tenants/Modules/HRM/Controllers/EmployeeController.php) | `photo_temp_key` rule: `nullable\|string\|max:255\|starts_with:uploads/` |
+| [frontend/composables/useUpload.ts](../../frontend/composables/useUpload.ts) | `uploadEmployeePhoto(file)` → presign + raw `fetch` PUT, returns key |
+| [frontend/pages/hrm/employees/create.vue](../../frontend/pages/hrm/employees/create.vue) | `onSubmit` uploads photo first, sends `photo_temp_key` in the create payload |
+
+**Security guards**
+
+- Upload endpoint is inside the `auth:api` + tenant middleware group — no
+  unauthenticated presigns.
+- Mime + size validated by the controller (JPEG/PNG, ≤ 2 MB).
+- `EmployeeService::commitObject` refuses any source key that doesn't
+  start with `uploads/` — defeats forged `photo_temp_key` values that
+  would try to copy from another tenant's prefix.
+- Bucket stays private; reads go through 5-minute presigned GET URLs in
+  `photo_url`. No public ACLs.
+- 1-day lifecycle rule on `uploads/` reclaims abandoned presigned PUTs
+  (browser closed mid-upload, validation failed, etc.).
+
+**Run it on a fresh machine**
+
+```bash
+docker compose down
+docker compose build app           # picks up league/flysystem-aws-s3-v3
+docker compose up -d
+# wait ~10s for MinIO health + bucket bootstrap to run
+docker compose exec app composer install
+docker compose exec app php artisan tenants:migrate
+# Open the MinIO console at http://localhost:9001
+#   user: erp-dev-root  /  pass: erp-dev-secret
+```
+
+**Production swap** — set `AWS_BUCKET`, `AWS_ENDPOINT`, `AWS_PUBLIC_ENDPOINT`
+to the prod target (R2, S3, Spaces) and remove the `minio` services from
+`docker-compose.yml`. Use scoped IAM credentials, never bucket root keys.
+
+### What still needs your hands
+
+- Run `docker compose exec app php artisan tenants:migrate` to apply the
+  6 new tenant migrations on existing tenants.
+- Test the full submit against a fresh employee — verify rows land in
+  `employees`, `employee_addresses` (3 rows: current/permanent/emergency),
+  `employee_spouses`, `employee_emergency_contacts`, `employee_educations`,
+  `employee_contracts`.
+- Pest tests for the integration (P0 isolation + transaction rollback on
+  partial failure) are still outstanding.
+- The employee detail page ([[id]/index.vue](../../frontend/pages/hrm/employees/[id]/index.vue))
+  doesn't yet render the new sections — it only shows notes / documents /
+  leave balances. Wiring those tabs is a follow-up.

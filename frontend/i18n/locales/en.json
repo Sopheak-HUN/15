@@ -492,7 +492,8 @@
         "errors": {
           "photoRequired": "Photo is required",
           "photoTooLarge": "Photo must be 2 MB or smaller",
-          "photoInvalidType": "Photo must be a JPG or PNG image"
+          "photoInvalidType": "Photo must be a JPG or PNG image",
+          "submitFailed": "Could not create employee"
         }
       },
       "employmentTypes": {

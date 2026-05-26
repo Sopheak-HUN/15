@@ -45,10 +45,26 @@ services:
       - CACHE_STORE=redis
       - QUEUE_CONNECTION=redis
       - SESSION_DRIVER=redis
+      # ---- S3-compatible object storage (MinIO in dev, R2/S3 in prod) ----
+      # AWS_ENDPOINT is the host the Laravel app uses to call MinIO.
+      # AWS_PUBLIC_ENDPOINT is the host stamped into presigned URLs the
+      # browser receives — both must be reachable from their respective
+      # contexts, hence the split (in-container `minio:9000` vs.
+      # browser-reachable `localhost:9000`).
+      - FILESYSTEM_DISK=s3
+      - AWS_ACCESS_KEY_ID=erp-dev-root
+      - AWS_SECRET_ACCESS_KEY=erp-dev-secret
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_BUCKET=erp-uploads
+      - AWS_ENDPOINT=http://minio:9000
+      - AWS_PUBLIC_ENDPOINT=http://localhost:9000
+      - AWS_USE_PATH_STYLE_ENDPOINT=true
     depends_on:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - erp_network
@@ -82,10 +98,20 @@ services:
       - REDIS_PORT=6379
       - CACHE_STORE=redis
       - QUEUE_CONNECTION=redis
+      - FILESYSTEM_DISK=s3
+      - AWS_ACCESS_KEY_ID=erp-dev-root
+      - AWS_SECRET_ACCESS_KEY=erp-dev-secret
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_BUCKET=erp-uploads
+      - AWS_ENDPOINT=http://minio:9000
+      - AWS_PUBLIC_ENDPOINT=http://localhost:9000
+      - AWS_USE_PATH_STYLE_ENDPOINT=true
     depends_on:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - erp_network
@@ -113,6 +139,58 @@ services:
     networks:
       - erp_network
     restart: unless-stopped
+
+  # -------------------------------------------------------------
+  # MINIO - S3-compatible object storage (employee photos, etc.)
+  # Console UI on :9001  |  S3 API on :9000
+  # -------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: erp_minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: erp-dev-root
+      MINIO_ROOT_PASSWORD: erp-dev-secret
+    volumes:
+      - erp_minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local 2>/dev/null || curl -fsS http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - erp_network
+    restart: unless-stopped
+
+  # -------------------------------------------------------------
+  # MINIO-INIT - Creates the `erp-uploads` bucket and applies a
+  # lifecycle rule so orphaned `uploads/` keys auto-delete after
+  # 1 day. Browser uploads go to `uploads/{nanoid}.{ext}` (the
+  # presigned PUT target); on commit, EmployeeService copies the
+  # blob to `tenants/{handle}/employees/{uuid}/photo.{ext}` and
+  # deletes the temp object.
+  # Runs once and exits.
+  # -------------------------------------------------------------
+  minio-init:
+    image: minio/mc:latest
+    container_name: erp_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        set -e;
+        mc alias set local http://minio:9000 erp-dev-root erp-dev-secret;
+        mc mb --ignore-existing local/erp-uploads;
+        mc ilm rule add --expire-days 1 --prefix 'uploads/' local/erp-uploads 2>/dev/null || true;
+        echo 'MinIO bucket erp-uploads ready';
+      "
+    networks:
+      - erp_network
+    restart: "no"
 
   # -------------------------------------------------------------
   # REDIS - Caching, Queues, and Reverb WebSockets
@@ -144,5 +222,7 @@ volumes:
   erp_db_data:
     driver: local
   erp_redis_data:
+    driver: local
+  erp_minio_data:
     driver: local
   erp_vendor:

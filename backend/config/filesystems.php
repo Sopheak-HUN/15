@@ -55,6 +55,10 @@ return [
             'bucket' => env('AWS_BUCKET'),
             'url' => env('AWS_URL'),
             'endpoint' => env('AWS_ENDPOINT'),
+            // Browser-facing endpoint used ONLY by S3UploadService to sign
+            // presigned URLs. The Laravel side keeps using `endpoint` for
+            // its own copy/delete/get calls inside the Docker network.
+            'public_endpoint' => env('AWS_PUBLIC_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'throw' => false,
             'report' => false,

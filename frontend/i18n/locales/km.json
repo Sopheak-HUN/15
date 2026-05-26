@@ -492,7 +492,8 @@
         "errors": {
           "photoRequired": "ត្រូវការរូបថត",
           "photoTooLarge": "រូបថតមិនអាចលើស 2 MB",
-          "photoInvalidType": "រូបថតត្រូវតែជា JPG ឬ PNG"
+          "photoInvalidType": "រូបថតត្រូវតែជា JPG ឬ PNG",
+          "submitFailed": "មិនអាចបង្កើតបុគ្គលិកបានទេ"
         }
       },
       "employmentTypes": {

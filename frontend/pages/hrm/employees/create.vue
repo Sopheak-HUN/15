@@ -9,6 +9,7 @@ definePageMeta({ middleware: 'auth' })
 
 const hrm = useHrmApi()
 const geo = useCambodiaGeo()
+const uploads = useUpload()
 const toast = useToast()
 const { t, locale } = useI18n()
 const geoLabel = (u: GeoUnit) => (locale.value === 'km' && u.name_kh ? u.name_kh : u.name)
@@ -232,7 +233,7 @@ const STEP_KEYS = {
 
 const today = new Date().toISOString().split('T')[0]
 
-const { defineField, handleSubmit, errors, validateField, setFieldValue, values, isSubmitting } = useForm({
+const { defineField, handleSubmit, errors, validateField, setFieldValue, isSubmitting } = useForm({
   validationSchema: schema,
   initialValues: {
     first_name: '',
@@ -665,14 +666,231 @@ const goNext = async (next: string) => {
   activeStep.value = next
 }
 
+// Map a wizard contract_type to the backend's employment_type enum
+// (full_time | part_time | contract | intern).
+const employmentTypeFromContract = (kind?: string | null): 'full_time' | 'part_time' | 'contract' | 'intern' => {
+  switch (kind) {
+    case 'internship': return 'intern'
+    case 'fdc':
+    case 'consulting': return 'contract'
+    default: return 'full_time' // work / udc / probation
+  }
+}
+
+// Map a Laravel 422 error field back to a wizard field so we can jump-to-step.
+// Top-level columns match 1:1; nested keys (e.g. "current_address.village_code")
+// are routed via their dotted-path prefix in jumpToStepFromServerErrors().
+const SERVER_FIELD_TO_WIZARD: Record<string, string> = {
+  hire_date: 'joined_date',
+  base_salary: 'salary',
+  id_card_number: 'id_card_number',
+  // Nested address keys → step 2/3/5 anchors
+  'current_address.home_number': 'home_number',
+  'current_address.street': 'street',
+  'current_address.province_code': 'province_id',
+  'current_address.district_code': 'district_id',
+  'current_address.commune_code': 'commune_id',
+  'current_address.village_code': 'village_id',
+  'permanent_address.province_code': 'perm_province_id',
+  'permanent_address.district_code': 'perm_district_id',
+  'permanent_address.commune_code': 'perm_commune_id',
+  'permanent_address.village_code': 'perm_village_id',
+  'emergency_address.province_code': 'er_province_id',
+  'emergency_address.district_code': 'er_district_id',
+  'emergency_address.commune_code': 'er_commune_id',
+  'emergency_address.village_code': 'er_village_id',
+  // Nested blocks → first field of the corresponding step
+  'spouse.name': 'spouse_name',
+  'emergency_contact.father_name': 'er_father_name',
+  'emergency_contact.mother_name': 'er_mother_name',
+  'emergency_contact.phone_number': 'er_phone_number',
+  'contract.type': 'contract_type',
+  'contract.start_date': 'contract_start',
+  'contract.end_date': 'contract_end',
+}
+
 const onSubmit = handleSubmit(
-  async () => {
-    // TODO: replace with real createEmployee() call once the backend payload
-    // shape is agreed. Today we just capture the gathered state so the wizard
-    // UX is testable end-to-end.
-    toast.add({ severity: 'info', summary: 'Wizard captured (frontend only)', life: 2500 })
-    // eslint-disable-next-line no-console
-    console.log('Wizard payload:', values, photoFile.value)
+  async (v) => {
+    // ── Step 0: upload the photo to MinIO/S3 BEFORE creating the row ──
+    // Returns a one-time `uploads/{nanoid}.{ext}` key that the backend
+    // moves under the tenant's permanent prefix during create. If this
+    // call fails we surface the error and let the user retry — no DB
+    // write happens until we have the key.
+    let photoTempKey: string | null = null
+    if (photoFile.value) {
+      try {
+        photoTempKey = await uploads.uploadEmployeePhoto(photoFile.value)
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        toast.add({
+          severity: 'error',
+          summary: t('hrm.employees.wizard.errors.submitFailed'),
+          detail: msg,
+          life: 4500,
+        })
+        return
+      }
+    }
+
+    // Build the nested payload that the backend's POST /api/hrm/employees
+    // now accepts (see backend/app/Tenants/Modules/HRM/Controllers/EmployeeController.php
+    // and EmployeeService::create). Empty sub-blocks are sent as null/[] —
+    // the service skips creating rows when all the fields inside are blank.
+    const buildAddress = (
+      home: string | null | undefined,
+      street: string | null | undefined,
+      provinceCode: string | null | undefined,
+      districtCode: string | null | undefined,
+      communeCode: string | null | undefined,
+      villageCode: string | null | undefined,
+      lat: number | null | undefined,
+      lng: number | null | undefined,
+      group?: string | null,
+    ) => ({
+      home_number:   home?.trim() || null,
+      street:        street?.trim() || null,
+      province_code: provinceCode || null,
+      district_code: districtCode || null,
+      commune_code:  communeCode || null,
+      village_code:  villageCode || null,
+      group:         group?.trim() || null,
+      lat:           lat ?? null,
+      lng:           lng ?? null,
+    })
+
+    const payload = {
+      // ── Top-level employees columns ───────────────────────────
+      first_name:      v.first_name,
+      last_name:       v.last_name,
+      first_name_kh:   v.first_name_kh || null,
+      last_name_kh:    v.last_name_kh || null,
+      email:           v.email,
+      phone:           v.phone || null,
+      office_phone:    v.office_phone || null,
+      contact_phone:   v.contact_phone || null,
+      date_of_birth:   v.date_of_birth || null,
+      gender:          v.gender || null,
+      nationality:     v.nationality || null,
+      nssf_id:         v.nssf_id || null,
+      role_name:       v.role_name || null,
+      bank_account:    v.bank_account || null,
+
+      // Identification document
+      identification_type: v.identification_type || null,
+      id_card_number:      v.id_card_number || null,
+      id_issued_date:      v.id_issued_date || null,
+      id_issued_by:        v.id_issued_by || null,
+      id_issued_place:     v.id_issued_place || null,
+
+      // Personal
+      religion:        v.religion || null,
+      marital_status:  v.marital_status || null,
+      blood_group:     v.blood_group || null,
+      children_count:  v.children_count ?? 0,
+
+      // Org placement
+      department_id:   v.department_id,
+      position_id:     v.position_id,
+      hire_date:       v.joined_date || null,
+      employment_type: employmentTypeFromContract(v.contract_type),
+      base_salary:     v.salary ?? null,
+      country:         'Cambodia',
+
+      // Pre-uploaded photo key — backend's EmployeeService moves the
+      // object from `uploads/...` to `tenants/{handle}/employees/{uuid}/...`
+      // and stamps `photo_path`. `null` is fine; the column is nullable.
+      photo_temp_key:  photoTempKey,
+
+      // ── Nested sub-payloads ───────────────────────────────────
+      current_address: buildAddress(
+        v.home_number, v.street,
+        v.province_id, v.district_id, v.commune_id, v.village_id,
+        v.lat, v.lng,
+      ),
+      permanent_address: buildAddress(
+        v.perm_home_number, v.perm_street,
+        v.perm_province_id, v.perm_district_id, v.perm_commune_id, v.perm_village_id,
+        v.perm_lat, v.perm_lng,
+      ),
+      emergency_address: buildAddress(
+        v.er_home, v.er_street,
+        v.er_province_id, v.er_district_id, v.er_commune_id, v.er_village_id,
+        null, null,
+        v.er_group,
+      ),
+      spouse: {
+        name:           v.spouse_name || null,
+        date_of_birth:  v.spouse_date_of_birth || null,
+        education:      v.spouse_education || null,
+        occupation:     v.spouse_occupation || null,
+      },
+      emergency_contact: {
+        father_name:        v.er_father_name || null,
+        father_occupation:  v.er_father_occupation || null,
+        mother_name:        v.er_mother_name || null,
+        mother_occupation:  v.er_mother_occupation || null,
+        phone_number:       v.er_phone_number || null,
+        home_phone:         v.er_home_phone || null,
+      },
+      educations: (v.education_level || v.major_subject || v.education_status || v.university_school)
+        ? [{
+            level:             v.education_level || null,
+            major_subject:     v.major_subject || null,
+            status:            v.education_status || null,
+            university_school: v.university_school || null,
+          }]
+        : [],
+      contract: v.contract_type
+        ? {
+            type:       v.contract_type,
+            start_date: v.contract_start || null,
+            end_date:   v.contract_end || null,
+            comment:    v.contract_comment || null,
+          }
+        : null,
+    }
+
+    try {
+      const resp = await hrm.createEmployee(payload)
+      toast.add({
+        severity: 'success',
+        summary: t('hrm.employees.toast.created'),
+        detail: resp?.data?.employee_id,
+        life: 2500,
+      })
+      await navigateTo('/hrm/employees')
+    } catch (err: unknown) {
+      const data = (err as { data?: { message?: string; errors?: Record<string, string[]> } }).data
+
+      // If Laravel returned field-level validation errors, jump to the
+      // earliest step that owns one of them so the user sees the broken input.
+      if (data?.errors && typeof data.errors === 'object') {
+        const stepEntries = Object.entries(STEP_KEYS) as [keyof typeof STEP_KEYS, readonly string[]][]
+        const wizardErrFields = Object.keys(data.errors).map((k) => SERVER_FIELD_TO_WIZARD[k] ?? k)
+        for (const [step, keys] of stepEntries) {
+          if (wizardErrFields.some((f) => (keys as readonly string[]).includes(f))) {
+            activeStep.value = step
+            break
+          }
+        }
+        const firstKey = Object.keys(data.errors)[0]
+        const firstMsg = firstKey ? data.errors[firstKey]?.[0] : undefined
+        toast.add({
+          severity: 'error',
+          summary: data?.message || t('hrm.employees.wizard.errors.submitFailed'),
+          detail: firstMsg,
+          life: 4500,
+        })
+        return
+      }
+
+      toast.add({
+        severity: 'error',
+        summary: t('hrm.employees.wizard.errors.submitFailed'),
+        detail: data?.message,
+        life: 4000,
+      })
+    }
   },
   ({ errors: validationErrors }) => {
     // Jump back to the earliest step containing an invalid field so the

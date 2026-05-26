@@ -30,6 +30,7 @@ use App\Tenants\Modules\HRM\Controllers\SuggestionController;
 use App\Tenants\Modules\HRM\Controllers\EmployeeNoteController;
 use App\Tenants\Modules\HRM\Controllers\EmployeeDocumentController;
 use App\Tenants\Modules\HRM\Controllers\AttendanceController;
+use App\Http\Controllers\UploadController;
 
 // Tenant is identified via the `tenant` HTTP header (or `?tenant=` query param)
 // carrying the tenant handle/id. Header name is configured in TenancyServiceProvider.
@@ -45,6 +46,9 @@ Route::middleware([
     Route::post('/api/auth/sso/callback', [SsoController::class, 'callback']);
 
     Route::middleware('auth:api')->group(function() {
+        // ---------- Uploads (S3-compatible presigned URLs) ----------
+        Route::post('/api/uploads/employee-photo', [UploadController::class, 'employeePhoto']);
+
         // ---------- IAM ----------
         Route::post('/api/auth/logout', [AuthController::class, 'logout']);
         Route::post('/api/auth/mfa/setup', [AuthController::class, 'setupMfa']);

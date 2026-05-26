@@ -25,7 +25,14 @@ The server resolves the tenant from this header via Stancl's `InitializeTenancyB
 | `Authorization` | All routes inside the `auth:api` middleware group | `Bearer <token>` | Token obtained from `POST /api/auth/login`. |
 | `Content-Type` | Any request with a JSON body | `application/json` | — |
 
-The `tenant` header is **not** required for endpoints in [routes/api.php](../backend/routes/api.php) (currently only `POST /api/tenants`, which is the onboarding call that creates the tenant in the first place).
+The `tenant` header is **not** required for endpoints in [routes/api.php](../backend/routes/api.php) — currently:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/tenants` | Onboarding (creates the tenant, so no handle exists yet) |
+| `GET  /api/geo/{level}` | Cambodia administrative geography — reference data shared across all tenants, served from the central DB |
+
+Every other endpoint — including the file-upload presign — lives under the tenant-scoped group in [routes/tenant.php](../backend/routes/tenant.php) and **requires** `tenant: <handle>`.
 
 ## 2. Authentication Flow
 
@@ -120,7 +127,32 @@ export const useApi = () => {
 | `{"success":false,"message":"Key file ... permissions are not correct ..."}` | Key files at `storage/oauth-*.key` have looser perms than 0660. | Container entrypoint auto-chmods to 0600 on boot. Outside Docker, `chmod 600 storage/oauth-*.key`. |
 | `{"success":false,"message":"Invalid key supplied"}` | Passport looking at the wrong key path (tenancy rewrote `storage_path()`). | Confirm `Passport::loadKeysFrom(base_path('storage'))` is in [AppServiceProvider.php](../backend/app/Providers/AppServiceProvider.php). |
 
-## 8. Postman
+## 8. File uploads
+
+User-uploaded files (employee photos today, more later) **never** flow through the Laravel app. The browser uploads bytes directly to an S3-compatible bucket via a short-lived presigned URL:
+
+```
+POST /api/uploads/employee-photo                          ← Laravel signs a 10-min PUT
+       tenant: acme
+       Authorization: Bearer <token>
+       Content-Type: application/json
+       { "mime": "image/jpeg", "size": 134217 }
+
+       → 200 { "upload_url": "http://localhost:9000/erp-uploads/uploads/xyz.jpg?...", "key": "uploads/xyz.jpg", "expires_in": 600 }
+
+PUT  <upload_url>                                         ← Browser PUTs the raw File bytes
+       Content-Type: image/jpeg
+       <binary>
+
+POST /api/hrm/employees                                   ← Wizard submits with photo_temp_key
+       { ..., "photo_temp_key": "uploads/xyz.jpg" }
+```
+
+The Laravel service moves the temp key into the tenant's permanent prefix (`tenants/{handle}/employees/{uuid}/photo.jpg`) after the DB transaction commits. The bucket's 1-day lifecycle rule on `uploads/` auto-deletes abandoned presigned PUTs.
+
+Full architecture: [docs/object-storage.md](./object-storage.md).
+
+## 9. Postman
 
 The bundled collection at [docs/postman/erp_collection.json](postman/erp_collection.json) injects the `tenant` header on every request via a collection-level pre-request script:
 

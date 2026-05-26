@@ -25,6 +25,7 @@ A high-performance, modular, and premium Enterprise Resource Planning (ERP) syst
 - **Core**: Laravel 11+ (PHP 8.2+)
 - **Database**: PostgreSQL (via `stancl/tenancy`)
 - **Auth**: Laravel Passport (OAuth2 & OIDC)
+- **Object Storage**: MinIO (dev) / AWS S3 · Cloudflare R2 (prod) — presigned-URL uploads, never on local disk. See [`docs/object-storage.md`](docs/object-storage.md).
 - **Testing**: Pest PHP (Security & Tenancy focus)
 
 ### Frontend
@@ -71,7 +72,8 @@ To maintain the integrity of this enterprise system, all contributors (human and
 git clone https://github.com/pphatdev/erp-prompt.git
 cd erp-prompt
 
-# Bring up nginx, php-fpm, queue worker, postgres, redis
+# Bring up nginx, php-fpm, queue worker, postgres, redis, minio
+# (minio-init creates the `erp-uploads` bucket on first boot)
 docker compose up -d
 
 # Run central migrations + central seed (creates the Passport personal-access client)
@@ -79,7 +81,7 @@ docker compose exec app php artisan migrate --force
 docker compose exec app php artisan db:seed --force
 ```
 
-The API is now reachable at `http://localhost:8000`.
+The API is now reachable at `http://localhost:8000`. The MinIO console is at `http://localhost:9001` (dev creds: `erp-dev-root` / `erp-dev-secret`).
 
 ### 3. Onboard your first tenant
 ```bash
@@ -113,6 +115,10 @@ Default seeded credentials (change before any non-local environment):
 Import [`docs/postman/erp_collection.json`](docs/postman/erp_collection.json) into Postman. The collection-level pre-request script adds `tenant: {{tenant_id}}` to every request and capture scripts chain `token`, `role_id`, and `permission_ids` automatically. Recommended run order: **Onboard Tenant → Login → List Permissions → Create Role → Sync Role Permissions → List Audit Logs**.
 
 Full auth and tenant-header reference: [`docs/api-authentication.md`](docs/api-authentication.md).
+
+Other reference docs:
+- [`docs/object-storage.md`](docs/object-storage.md) — MinIO/S3 presigned-upload flow + dev/prod swap.
+- [`docs/hrm-employee-creation.md`](docs/hrm-employee-creation.md) — HRM employee creation wizard ↔ backend integration (7 tenant tables + Cambodia geography + photo upload).
 
 ### 6. Frontend (optional)
 ```bash
