@@ -52,6 +52,10 @@ db-rollback:
 db-seed:
     docker compose exec app php artisan db:seed --force
 
+# Geo import (populates provinces/districts/communes/villages)
+geodb-import:
+    docker compose exec app php artisan geo:import
+
 # Onboard new tenant (e.g. just tenant-create acme "Acme Corp")
 tenant-create handle name:
     curl -X POST http://localhost:8000/api/tenants \

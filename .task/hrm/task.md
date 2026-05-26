@@ -77,3 +77,87 @@
 - Tax engine is intentionally minimal — production tenants plug jurisdiction rules in as `PayComponent` rows (`percentage_of_base`/`fixed`, taxable flag).
 - eApprovals integration for leave/expenses (see `rules.md`) is a follow-up — currently `LeaveService` runs approval inline via `WorkflowStatusService` transitions.
 - Employee document uploads currently store **metadata only** — the actual file upload pipeline (multipart endpoint + `tenant_path()` storage) is a follow-up. The dialog accepts a `file_path` field assuming the file is already in tenant storage.
+
+---
+
+## Session log: Employee creation wizard (2026-05-26)
+
+Rebuilt the previous single-page create form as a **7-step wizard** at
+[frontend/pages/hrm/employees/create.vue](../../frontend/pages/hrm/employees/create.vue).
+The page navigates Province → District → Commune → Village via the new
+shared Cambodia geo composable (see `.task/geo/task.md`).
+
+### Steps shipped
+
+1. **Basic info** — first/last name (EN + KH), employee ID (auto), gender,
+   date of birth, joined date (defaults to today), NSSF ID, department,
+   position (filtered by department), nationality, role name, office phone,
+   phone, email, bank account, salary, photo upload with preview.
+2. **Current address** — home number, street, province/district/commune/village
+   cascade, lat/lng with Google Maps iframe embed and "Use my current location"
+   geolocation button.
+3. **Permanent address** — same shape as Step 2 with a **"Same as current
+   address" checkbox** that copies all 8 values in cascade-aware order
+   (set parent → await child fetch → set child) and disables the inputs.
+   Reactive watcher keeps the two sides in lockstep while the toggle is on.
+4. **Contact information** — Type of Identification (national_id/passport/etc.),
+   ID card number, issued date/by/place, religion, marital status, blood
+   group, spouse name/DOB/education/occupation, children count, contact
+   phone (intentionally separate from Step 1's `phone` field).
+5. **Relative / Emergency contact** — father/mother name + occupation,
+   home/street, full Cambodia geo cascade (independent state `er_*`),
+   group, phone number, home phone.
+6. **Education detail** — education level (dual-language options like
+   "Doctor of Philosophy / បណ្ឌិត"), major subject, education status,
+   university/school.
+7. **Employee contract (final)** — contract type (dual-language: Work
+   Contract / FDC / UDC / Probation / Internship / Consulting), start
+   date, end date, comment. Submit button replaces "Next"; on validation
+   failure the wizard jumps back to the earliest invalid step with a
+   pointing toast.
+
+### Cross-cutting wizard mechanics
+
+- **Zod schema is `computed`** so error messages re-translate on locale
+  switch (`hrm.common.required` → `ទាមទារ` in KH).
+- **`reqStr()` helper** sets both `required_error` and `invalid_type_error`
+  so fields whose initial value is `null`/`undefined` still show our
+  translated message (otherwise Zod's English default "Required" leaked).
+- **Per-step validation** via `validateField` + a `STEP_KEYS` map — only
+  the current step's keys are validated when the user clicks "Next", so
+  Step 1 doesn't block on Step 4 errors.
+- **Independent geo refs per address** (current / permanent / emergency)
+  so the three dropdown sets don't share options. The shared `provinces`
+  list IS reused via `watch(provinces, …, { immediate: true })` to avoid
+  refetching 25 provinces three times.
+- **Dynamic dropdown height** — `dropdownHeight(count)` returns
+  `count*38+8px` up to 10 items, then caps at 380px and lets the virtual
+  scroller take over. Virtual scroller is only enabled when items > 10,
+  so a 3-village commune shows a snug 122px panel instead of a 380px void.
+
+### i18n additions
+
+- Hundreds of keys added across `en.json` + `km.json` under `hrm.employees.*`
+  (fields, placeholders, sections, wizard steps, identificationTypes,
+  religions, maritalStatuses, educationLevels).
+- `hrm.common.required` = "Required" / "ទាមទារ".
+- Cambodian-HR convention for degree levels and contract types uses
+  hardcoded dual-language labels ("English / ខ្មែរ") instead of
+  per-locale strings since both are always shown together.
+- Bonus: `firstName` / `lastName` in `km.json` now render as
+  `នាមឡាតាំង` / `នាមត្រកូលឡាតាំង` (Latin-script names) so the KH UI
+  distinguishes them from the `firstNameKh` / `lastNameKh` fields.
+
+### Layout fix
+
+- [frontend/layouts/default.vue](../../frontend/layouts/default.vue):
+  root container switched from `min-h-screen` to `h-screen overflow-hidden`
+  so the sidebar and topbar stay pinned and only the `<main>` scrolls.
+
+### Frontend submit handler — STILL A PLACEHOLDER
+
+`onSubmit` in `create.vue` currently just toasts and `console.log`s the
+gathered payload. Backend `POST /api/employees` payload mapping has NOT
+been wired — when ready, replace the toast block with a real
+`hrm.createEmployee(payload)` call. The cross-step validation jump-back
+will keep working.

@@ -67,7 +67,7 @@ const sidebarOpen = ref(true)
 </script>
 
 <template>
-  <div class="min-h-screen flex bg-surface-50 dark:bg-surface-950">
+  <div class="h-screen overflow-hidden flex bg-surface-50 dark:bg-surface-950">
     <!-- Sidebar -->
     <aside
       class="hidden md:flex flex-col border-r border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-900 transition-all duration-200"

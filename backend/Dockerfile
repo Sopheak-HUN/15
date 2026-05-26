@@ -7,6 +7,7 @@ WORKDIR /var/www
 # Install system dependencies
 RUN apk add --no-cache \
     bash \
+    ca-certificates \
     curl \
     libpng-dev \
     libzip-dev \
