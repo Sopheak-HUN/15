@@ -34,18 +34,28 @@ class LeaveRequestController extends Controller
 
     public function show(LeaveRequest $leave_request)
     {
-        return response()->json(['data' => $leave_request->load(['employee', 'leaveType', 'approver:id,first_name,last_name'])]);
+        return response()->json(['data' => $leave_request->load([
+            'employee', 'leaveType',
+            'approver:id,first_name,last_name',
+            'assignedTo:id,first_name,last_name,employee_id',
+        ])]);
     }
 
     public function store(Request $request)
     {
         $data = $request->validate([
-            'employee_id'   => 'required|uuid|exists:employees,id',
-            'leave_type_id' => 'required|uuid|exists:leave_types,id',
-            'start_date'    => 'required|date',
-            'end_date'      => 'required|date|after_or_equal:start_date',
-            'days'          => 'nullable|numeric|min:0.5',
-            'reason'        => 'nullable|string|max:500',
+            'employee_id'    => 'required|uuid|exists:employees,id',
+            'leave_type_id'  => 'required|uuid|exists:leave_types,id',
+            'duration_type'  => 'nullable|in:full_day,half_day',
+            'start_date'     => 'required|date',
+            'end_date'       => 'required|date|after_or_equal:start_date',
+            'days'           => 'nullable|numeric|min:0.5',
+            'reason'         => 'nullable|string|max:500',
+            'assign_to'      => 'nullable|uuid|exists:employees,id',
+            // Reference file uploaded via POST /api/uploads/leave-reference.
+            // Must live under the tenant's per-employee prefix to block
+            // forged-key cross-tenant copies.
+            'reference_path' => 'nullable|string|max:255|starts_with:tenants/',
         ]);
 
         $employee = Employee::findOrFail($data['employee_id']);
@@ -57,15 +67,19 @@ class LeaveRequestController extends Controller
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
 
-        return response()->json(['success' => true, 'data' => $req->load(['employee', 'leaveType'])], 201);
+        return response()->json(['success' => true, 'data' => $req->load([
+            'employee', 'leaveType', 'assignedTo:id,first_name,last_name,employee_id',
+        ])], 201);
     }
 
     public function approve(Request $request, LeaveRequest $leave_request)
     {
+        // Approver lookup is best-effort: if the caller is linked to an
+        // Employee row we stamp `approved_by` for HR reporting; otherwise
+        // (HR admin / super-admin with no Employee profile) we pass null.
+        // The Auditable trait still records `user_id` on the change so
+        // there's a full who-did-this trail in `audit_logs`.
         $approver = $this->resolveApprover($request);
-        if (! $approver) {
-            return response()->json(['success' => false, 'message' => 'Approver employee not linked to caller.'], 422);
-        }
         try {
             $updated = $this->service->approve($leave_request, $approver);
         } catch (DomainException $e) {
@@ -78,9 +92,6 @@ class LeaveRequestController extends Controller
     {
         $data = $request->validate(['reason' => 'nullable|string|max:500']);
         $approver = $this->resolveApprover($request);
-        if (! $approver) {
-            return response()->json(['success' => false, 'message' => 'Approver employee not linked to caller.'], 422);
-        }
         try {
             $updated = $this->service->reject($leave_request, $approver, $data['reason'] ?? null);
         } catch (DomainException $e) {

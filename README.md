@@ -119,6 +119,7 @@ Full auth and tenant-header reference: [`docs/api-authentication.md`](docs/api-a
 Other reference docs:
 - [`docs/object-storage.md`](docs/object-storage.md) — MinIO/S3 presigned-upload flow + dev/prod swap.
 - [`docs/hrm-employee-creation.md`](docs/hrm-employee-creation.md) — HRM employee creation wizard ↔ backend integration (7 tenant tables + Cambodia geography + photo upload).
+- [`docs/frontend-conventions.md`](docs/frontend-conventions.md) — date formatter, font stack, component naming, and other cross-cutting frontend standards.
 
 ### 6. Frontend (optional)
 ```bash

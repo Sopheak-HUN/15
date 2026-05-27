@@ -2,6 +2,7 @@
 
 namespace App\Tenants\Modules\HRM\Services;
 
+use App\Models\User;
 use App\Services\S3UploadService;
 use App\Tenants\Modules\HRM\Models\Employee;
 use App\Tenants\Modules\HRM\Models\EmployeeAddress;
@@ -133,14 +134,117 @@ class EmployeeService
 
     public function update(Employee $employee, array $data): Employee
     {
-        return DB::transaction(function () use ($employee, $data) {
+        $photoTempKey = $data['photo_temp_key'] ?? null;
+
+        DB::transaction(function () use ($employee, $data) {
             if (isset($data['status']) && $data['status'] !== $employee->status) {
                 $this->statuses->validateTransition('hrm.employee', $employee->status, $data['status']);
             }
+
             $employeeData = array_intersect_key($data, array_flip(self::EMPLOYEE_COLUMNS));
             $employee->update($employeeData);
-            return $employee->refresh();
+
+            // ── Addresses: upsert by (employee_id, type) ────────────
+            // A sub-block in the payload triggers an upsert; an absent
+            // block leaves the existing row untouched. An empty-but-present
+            // block (all fields null) is treated as a clear → delete.
+            foreach ([
+                EmployeeAddress::TYPE_CURRENT   => 'current_address',
+                EmployeeAddress::TYPE_PERMANENT => 'permanent_address',
+                EmployeeAddress::TYPE_EMERGENCY => 'emergency_address',
+            ] as $type => $key) {
+                if (! array_key_exists($key, $data)) continue;
+                $normalized = $this->normalizeAddress($data[$key], $type);
+                if ($normalized === null) {
+                    EmployeeAddress::where('employee_id', $employee->id)->where('type', $type)->delete();
+                    continue;
+                }
+                EmployeeAddress::updateOrCreate(
+                    ['employee_id' => $employee->id, 'type' => $type],
+                    $normalized,
+                );
+            }
+
+            // ── Spouse (1:1) ────────────────────────────────────────
+            if (array_key_exists('spouse', $data)) {
+                $spouse = $data['spouse'] ?? null;
+                if (is_array($spouse) && $this->hasAny($spouse, ['name', 'date_of_birth', 'education', 'occupation'])) {
+                    EmployeeSpouse::updateOrCreate(
+                        ['employee_id' => $employee->id],
+                        array_intersect_key($spouse, array_flip(['name', 'date_of_birth', 'education', 'occupation'])),
+                    );
+                } else {
+                    EmployeeSpouse::where('employee_id', $employee->id)->delete();
+                }
+            }
+
+            // ── Emergency contact (1:1) ─────────────────────────────
+            if (array_key_exists('emergency_contact', $data)) {
+                $ec = $data['emergency_contact'] ?? null;
+                if (is_array($ec) && $this->hasAny($ec, [
+                    'father_name', 'father_occupation', 'mother_name', 'mother_occupation',
+                    'phone_number', 'home_phone',
+                ])) {
+                    EmployeeEmergencyContact::updateOrCreate(
+                        ['employee_id' => $employee->id],
+                        array_intersect_key($ec, array_flip([
+                            'father_name', 'father_occupation', 'mother_name', 'mother_occupation',
+                            'phone_number', 'home_phone',
+                        ])),
+                    );
+                } else {
+                    EmployeeEmergencyContact::where('employee_id', $employee->id)->delete();
+                }
+            }
+
+            // ── Educations (1:N): hard-replace the whole set ────────
+            // The wizard only captures one education row today. If we
+            // later let the user manage a list inline, switch to a
+            // diff-merge by id; replace is simplest until then.
+            if (array_key_exists('educations', $data)) {
+                EmployeeEducation::where('employee_id', $employee->id)->delete();
+                foreach ((array) ($data['educations'] ?? []) as $row) {
+                    if (! is_array($row) || ! $this->hasAny($row, ['level', 'major_subject', 'status', 'university_school'])) {
+                        continue;
+                    }
+                    $row['employee_id'] = $employee->id;
+                    EmployeeEducation::create($row);
+                }
+            }
+
+            // ── Contract (1:N): update the active one in place ──────
+            // We keep historical contracts; the wizard only edits the
+            // most-recent active row. A future "renew contract" action
+            // is the right place to roll the active row to expired and
+            // create a fresh one.
+            if (array_key_exists('contract', $data)) {
+                $contract = $data['contract'] ?? null;
+                if (is_array($contract) && ! empty($contract['type']) && ! empty($contract['start_date'])) {
+                    $payload = array_intersect_key($contract, array_flip([
+                        'type', 'start_date', 'end_date', 'comment',
+                    ]));
+                    $active = $employee->contracts()->where('status', EmployeeContract::STATUS_ACTIVE)->first();
+                    if ($active) {
+                        $active->update($payload);
+                    } else {
+                        $payload['employee_id'] = $employee->id;
+                        $payload['status']      = EmployeeContract::STATUS_ACTIVE;
+                        EmployeeContract::create($payload);
+                    }
+                }
+            }
         });
+
+        // Photo commit after the transaction succeeds (same as create()).
+        if ($photoTempKey) {
+            $this->commitEmployeePhoto($employee, $photoTempKey);
+        }
+
+        return $employee->fresh([
+            'department', 'position',
+            'currentAddress', 'permanentAddress', 'emergencyAddress',
+            'spouse', 'emergencyContact', 'educations', 'activeContract',
+        ]);
     }
 
     /**
@@ -182,6 +286,46 @@ class EmployeeService
         $employee->restore();
         $employee->update(['status' => 'active', 'termination_date' => null]);
         return $employee->refresh();
+    }
+
+    /**
+     * Provision a tenant `users` row for this employee and link it via
+     * `employees.user_id`. Throws if the employee already has an account
+     * so accidental double-create can't orphan the previous user row.
+     *
+     * `password` arrives in plaintext from the caller (the wizard either
+     * accepts it typed or shows a frontend-generated one). The User model
+     * casts `password => 'hashed'`, so Eloquent bcrypts it on save.
+     */
+    public function createUserAccount(Employee $employee, array $data): User
+    {
+        return DB::transaction(function () use ($employee, $data) {
+            if ($employee->user_id) {
+                throw new DomainException('This employee already has a user account.');
+            }
+
+            // Derive a handle from the email's local-part when the caller
+            // doesn't supply one. Strip anything outside [a-z0-9._-] so the
+            // resulting handle is URL-safe.
+            $handle = $data['handle'] ?? null;
+            if (! $handle) {
+                $localPart = strstr($data['email'], '@', true) ?: $data['email'];
+                $handle = preg_replace('/[^a-z0-9._-]/i', '', $localPart);
+            }
+
+            $user = User::create([
+                'name'      => trim(($employee->first_name ?? '') . ' ' . ($employee->last_name ?? '')),
+                'handle'    => $handle,
+                'email'     => $data['email'],
+                'password'  => $data['password'],
+                'role_id'   => $data['role_id'],
+                'is_active' => true,
+            ]);
+
+            $employee->forceFill(['user_id' => $user->id])->save();
+
+            return $user;
+        });
     }
 
     /**

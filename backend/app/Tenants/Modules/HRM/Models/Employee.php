@@ -131,7 +131,16 @@ class Employee extends Model
 
     public function activeContract(): HasOne
     {
-        return $this->hasOne(EmployeeContract::class)->where('status', EmployeeContract::STATUS_ACTIVE)->latestOfMany();
+        // Plain HasOne filtered by status. We deliberately avoid
+        // `latestOfMany()` because Laravel's subquery uses `MAX(id)` as a
+        // tiebreaker and our PKs are UUIDs (Postgres has no MAX(uuid)).
+        // Business rule: at any time an employee has at most one contract
+        // with status='active' — older contracts are moved to expired/
+        // terminated when a new one is signed. If duplicates ever appear
+        // it's a data bug, not something this relation should silently
+        // paper over.
+        return $this->hasOne(EmployeeContract::class)
+            ->where('status', EmployeeContract::STATUS_ACTIVE);
     }
 
     public function fullName(): string

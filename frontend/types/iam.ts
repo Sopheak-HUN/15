@@ -8,6 +8,13 @@ export interface User {
   is_active: boolean
   created_at: string
   updated_at: string
+  // Eager-loaded by /api/auth/login so the frontend can render the
+  // role name and use it for the super-admin bypass shortcut.
+  role?: { id: string; name: string; description?: string | null } | null
+  // Flat list of permission names the user has via their role (and
+  // any inherited parent roles). Drives sidebar gating and the
+  // `usePermissions().has()` composable.
+  effective_permissions?: string[]
 }
 
 export interface Role {

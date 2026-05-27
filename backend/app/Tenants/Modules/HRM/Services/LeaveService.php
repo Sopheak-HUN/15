@@ -21,18 +21,29 @@ class LeaveService
      */
     public function submitRequest(Employee $employee, LeaveType $type, array $data): LeaveRequest
     {
-        $start = CarbonImmutable::parse($data['start_date']);
-        $end   = CarbonImmutable::parse($data['end_date']);
-        if ($end->lt($start)) {
-            throw new DomainException('End date must be on or after start date.');
+        $durationType = $data['duration_type'] ?? LeaveRequest::DURATION_FULL_DAY;
+
+        // Half-day forces a single-day window and a fixed 0.5-day cost
+        // against the balance. Caller's `end_date` and `days` are ignored
+        // when duration_type is half_day so the math can't disagree.
+        if ($durationType === LeaveRequest::DURATION_HALF_DAY) {
+            $start = CarbonImmutable::parse($data['start_date']);
+            $end   = $start;
+            $days  = 0.5;
+        } else {
+            $start = CarbonImmutable::parse($data['start_date']);
+            $end   = CarbonImmutable::parse($data['end_date']);
+            if ($end->lt($start)) {
+                throw new DomainException('End date must be on or after start date.');
+            }
+            $days = (float) ($data['days'] ?? $start->diffInDays($end) + 1);
         }
 
-        $days = (float) ($data['days'] ?? $start->diffInDays($end) + 1);
         if ($days <= 0) {
             throw new DomainException('Leave duration must be positive.');
         }
 
-        return DB::transaction(function () use ($employee, $type, $data, $start, $end, $days) {
+        return DB::transaction(function () use ($employee, $type, $data, $start, $end, $days, $durationType) {
             $balance = LeaveBalance::lockForUpdate()
                 ->firstOrCreate(
                     [
@@ -51,13 +62,16 @@ class LeaveService
             }
 
             $request = LeaveRequest::create([
-                'employee_id'   => $employee->id,
-                'leave_type_id' => $type->id,
-                'start_date'    => $start,
-                'end_date'      => $end,
-                'days'          => $days,
-                'reason'        => $data['reason'] ?? null,
-                'status'        => $this->statuses->initialFor('hrm.leave'),
+                'employee_id'    => $employee->id,
+                'leave_type_id'  => $type->id,
+                'duration_type'  => $durationType,
+                'start_date'     => $start,
+                'end_date'       => $end,
+                'days'           => $days,
+                'reason'         => $data['reason'] ?? null,
+                'assign_to'      => $data['assign_to'] ?? null,
+                'reference_path' => $data['reference_path'] ?? null,
+                'status'         => $this->statuses->initialFor('hrm.leave'),
             ]);
 
             $balance->increment('pending', $days);
@@ -66,7 +80,7 @@ class LeaveService
         });
     }
 
-    public function approve(LeaveRequest $request, Employee $approver): LeaveRequest
+    public function approve(LeaveRequest $request, ?Employee $approver): LeaveRequest
     {
         return DB::transaction(function () use ($request, $approver) {
             $this->statuses->validateTransition('hrm.leave', $request->status, 'approved');
@@ -83,14 +97,14 @@ class LeaveService
 
             $request->update([
                 'status'      => 'approved',
-                'approved_by' => $approver->id,
+                'approved_by' => $approver?->id,
                 'approved_at' => now(),
             ]);
             return $request->refresh();
         });
     }
 
-    public function reject(LeaveRequest $request, Employee $approver, ?string $reason = null): LeaveRequest
+    public function reject(LeaveRequest $request, ?Employee $approver, ?string $reason = null): LeaveRequest
     {
         return DB::transaction(function () use ($request, $approver, $reason) {
             $this->statuses->validateTransition('hrm.leave', $request->status, 'rejected');
@@ -106,7 +120,7 @@ class LeaveService
 
             $request->update([
                 'status'           => 'rejected',
-                'approved_by'      => $approver->id,
+                'approved_by'      => $approver?->id,
                 'approved_at'      => now(),
                 'rejection_reason' => $reason,
             ]);

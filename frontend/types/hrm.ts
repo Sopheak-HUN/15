@@ -29,18 +29,88 @@ export interface Position {
   updated_at: string
 }
 
+export interface EmployeeAddress {
+  id: string
+  employee_id: string
+  type: 'current' | 'permanent' | 'emergency'
+  home_number?: string | null
+  street?: string | null
+  province_code?: string | null
+  district_code?: string | null
+  commune_code?: string | null
+  village_code?: string | null
+  group?: string | null
+  lat?: string | number | null
+  lng?: string | number | null
+}
+
+export interface EmployeeSpouse {
+  employee_id: string
+  name?: string | null
+  date_of_birth?: string | null
+  education?: string | null
+  occupation?: string | null
+}
+
+export interface EmployeeEmergencyContact {
+  employee_id: string
+  father_name?: string | null
+  father_occupation?: string | null
+  mother_name?: string | null
+  mother_occupation?: string | null
+  phone_number?: string | null
+  home_phone?: string | null
+}
+
+export interface EmployeeEducationRow {
+  id: string
+  employee_id: string
+  level?: string | null
+  major_subject?: string | null
+  status?: string | null
+  university_school?: string | null
+}
+
+export interface EmployeeContract {
+  id: string
+  employee_id: string
+  type: string
+  start_date: string
+  end_date?: string | null
+  comment?: string | null
+  status: 'active' | 'expired' | 'terminated'
+}
+
 export interface Employee {
   id: string
   employee_id: string
   first_name: string
   last_name: string
+  first_name_kh?: string | null
+  last_name_kh?: string | null
   email: string
   phone?: string | null
+  office_phone?: string | null
+  contact_phone?: string | null
   date_of_birth?: string | null
   gender?: string | null
+  nationality?: string | null
+  nssf_id?: string | null
+  role_name?: string | null
+  identification_type?: string | null
+  id_card_number?: string | null
+  id_issued_date?: string | null
+  id_issued_by?: string | null
+  id_issued_place?: string | null
+  religion?: string | null
+  marital_status?: string | null
+  blood_group?: string | null
+  children_count?: number | null
   address?: string | null
   city?: string | null
   country?: string | null
+  photo_path?: string | null
+  photo_url?: string | null            // 5-min presigned GET, set by the model accessor
   department_id?: string | null
   position_id?: string | null
   manager_id?: string | null
@@ -58,6 +128,19 @@ export interface Employee {
   department?: Pick<Department, 'id' | 'name'> | null
   position?: Pick<Position, 'id' | 'title'> | null
   manager?: { id: string; first_name: string; last_name: string } | null
+  // Tenant user account linked via employees.user_id — populated on the
+  // detail endpoint (employee.user:id,email,handle). null when the
+  // employee has no login yet.
+  user?: { id: string; email: string; handle: string | null } | null
+  // Relations loaded by GET /api/hrm/employees/{id}
+  current_address?: EmployeeAddress | null
+  permanent_address?: EmployeeAddress | null
+  emergency_address?: EmployeeAddress | null
+  spouse?: EmployeeSpouse | null
+  emergency_contact?: EmployeeEmergencyContact | null
+  educations?: EmployeeEducationRow[] | null
+  active_contract?: EmployeeContract | null
+  contracts?: EmployeeContract[] | null
   created_at: string
   updated_at: string
   deleted_at?: string | null
@@ -85,20 +168,30 @@ export interface LeaveBalance {
   leave_type?: LeaveType
 }
 
+export type LeaveDurationType = 'full_day' | 'half_day'
+
 export interface LeaveRequest {
   id: string
   employee_id: string
   leave_type_id: string
+  duration_type: LeaveDurationType
   start_date: string
   end_date: string
   days: string | number
   reason?: string | null
+  assign_to?: string | null
+  reference_path?: string | null
+  reference_url?: string | null  // 5-min presigned GET from the model accessor
   status: string
   approved_by?: string | null
   approved_at?: string | null
   rejection_reason?: string | null
+  // Laravel serializes relations as snake_case of the method name, so
+  // `leaveType()` → `leave_type`, `assignedTo()` → `assigned_to`, etc.
   employee?: Pick<Employee, 'id' | 'first_name' | 'last_name' | 'employee_id'>
-  leaveType?: Pick<LeaveType, 'id' | 'name' | 'code'>
+  leave_type?: Pick<LeaveType, 'id' | 'name' | 'code' | 'color'>
+  approver?: Pick<Employee, 'id' | 'first_name' | 'last_name'>
+  assigned_to?: Pick<Employee, 'id' | 'first_name' | 'last_name' | 'employee_id'>
 }
 
 export type PayComponentKind = 'earning' | 'deduction'

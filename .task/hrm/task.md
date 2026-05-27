@@ -302,16 +302,122 @@ docker compose exec app php artisan tenants:migrate
 to the prod target (R2, S3, Spaces) and remove the `minio` services from
 `docker-compose.yml`. Use scoped IAM credentials, never bucket root keys.
 
+### Edit screen — wizard reused as 7-step edit form
+
+The list page's pencil button at `/hrm/employees/{id}/edit` now opens
+the same 7-step wizard, pre-populated with the existing employee.
+Submit calls `PUT /api/hrm/employees/{id}` and toasts `Employee
+updated`. Photo is optional in edit mode (the schema relaxes the photo
+rule when `mode='edit'`).
+
+**Files**
+
+- [components/hrm/EmployeeWizardForm.vue](../../frontend/components/hrm/EmployeeWizardForm.vue) — the wizard, extracted from `create.vue`. Accepts `mode: 'create' | 'edit'` and `initial?: Employee` props. Maps the nested API response (`current_address`, `permanent_address`, `emergency_address`, `spouse`, `emergency_contact`, `educations[0]`, `active_contract`) back onto the flat wizard form keys via `buildInitial()`. On mount in edit mode, pre-fetches the 3 geo cascade lists (districts/communes/villages) for each address so dropdowns show names instead of opaque codes.
+- [pages/hrm/employees/create.vue](../../frontend/pages/hrm/employees/create.vue) — now a 5-line wrapper around `<EmployeeWizardForm />`.
+- [pages/hrm/employees/[id]/edit.vue](../../frontend/pages/hrm/employees/[id]/edit.vue) — fetches the employee via `useAsyncData`, renders `<EmployeeWizardForm mode="edit" :initial="employee" />` once data is ready. Gates on `v-if` so VeeValidate's `useForm` captures non-null `initialValues` synchronously.
+
+**Backend [EmployeeService::update](../../backend/app/Tenants/Modules/HRM/Services/EmployeeService.php)** now performs nested upserts inside a `DB::transaction`:
+
+| Sub-payload | Strategy |
+| --- | --- |
+| `employees.*` (scalar columns) | `Employee::update()` — same as before |
+| `current_address` / `permanent_address` / `emergency_address` | `updateOrCreate` keyed on `(employee_id, type)`. Empty-but-present block (all fields null) → delete the row |
+| `spouse` (1:1) | `updateOrCreate` keyed on `employee_id`. Empty block → delete |
+| `emergency_contact` (1:1) | same pattern as `spouse` |
+| `educations[]` | Hard replace — delete all rows for the employee, insert new array. Wizard only captures one row so this is fine; if a multi-row UI lands later, switch to diff-by-id |
+| `contract` | Update the active contract in place. If none exists, create one. Historical contracts are left alone — a future "renew contract" action is the right place to roll the active row to `expired` and create a fresh one |
+| `photo_temp_key` | Same flow as create — committed AFTER the DB transaction succeeds |
+
+Absent sub-blocks (key not present in payload) are left untouched. Empty-but-present blocks are treated as a "clear" → delete. This lets the frontend send any subset of the form without affecting the rest.
+
+**Type changes** — [frontend/types/hrm.ts](../../frontend/types/hrm.ts) gained `EmployeeAddress`, `EmployeeSpouse`, `EmployeeEmergencyContact`, `EmployeeEducationRow`, `EmployeeContract` interfaces. `Employee` now includes the new scalar columns (KH names, nssf_id, identification_*, religion, marital_status, blood_group, children_count, photo_path, photo_url) and the loaded relation slots. `useHrmApi.createEmployee` / `updateEmployee` write surfaces relaxed to `Record<string, unknown>` since the nested write payload's inner-only sub-blocks don't match the read shape.
+
+**i18n keys added** — `hrm.employees.wizard.editTitle`, `editSubtitle`, `actions.update` (en + km).
+
+### Detail page — Profile tab shipped (2026-05-27)
+
+[`pages/hrm/employees/[id]/index.vue`](../../frontend/pages/hrm/employees/[id]/index.vue)
+now renders the full structured profile.
+
+**Header** — 64px avatar (presigned `photo_url`) with initials fallback,
+EN + KH names side by side, `employee_id` + status chips, byline (email ·
+department · position · role_name), **Edit** button → `/hrm/employees/{id}/edit`.
+
+**Tabs** — Profile (NEW, default) · Notes · Documents · Leave. The
+Profile tab is a stack of `<Card>` sections:
+
+- Identity / Contact — names (EN+KH), DOB, gender, nationality, NSSF ID, role, phones, email, hire_date, employment_type
+- Identification — ID type, card number, issued date/by/place
+- Personal — religion, marital status, blood group, children count, + Spouse sub-block when populated
+- Addresses (2-col grid) — Current + Permanent with raw MEF codes resolved to human names via the geo composable; lat/lng shown when set
+- Emergency contact — father/mother + occupations + phones, with emergency address resolved
+- Education — list of degrees (level, status, major, school)
+- Contracts — full history table with active/expired/terminated status tags
+
+**Geo name resolution** — on mount, the page fetches `provinces` once
+and pre-loads districts/communes/villages lists for the three addresses'
+parent codes via `useCambodiaGeo()`. Composable caches per parent code,
+so 3-9 small fetches total. `addrDisplay(addr)` then concatenates the
+human names for each address.
+
+### Employee list — avatar column (2026-05-27)
+
+[`pages/hrm/employees/index.vue`](../../frontend/pages/hrm/employees/index.vue):
+the "Name" column now renders avatar + name + email in a single
+`<NuxtLink>` cell. `<img>` uses `data.photo_url` (presigned GET from the
+model accessor) with `loading="lazy"`. Initials fallback (primary-palette
+ring) when `photo_path` is null.
+
+### Backend hardening shipped this session (2026-05-27)
+
+Six bugs surfaced as users exercised the wizard end-to-end. All fixed:
+
+| Issue | Root cause | Fix |
+| --- | --- | --- |
+| `duplicate key (TT-0002) already exists` on create | `RecruitmentService::generateNextEmployeeId()` `MAX(employee_id)` query was scoped by SoftDeletes — it skipped terminated rows, but the unique index is full (not partial), so soft-deleted IDs still block reuse | [`RecruitmentService.php:159`](../../backend/app/Tenants/Modules/HRM/Services/RecruitmentService.php#L159) — added `Employee::withTrashed()`. We deliberately don't recycle terminated employees' IDs (audit-trail safety) |
+| `null in column auditable_id` when inserting EmployeeSpouse / EmployeeEmergencyContact | `Auditable` trait read `$this->id` directly, but 1:1 models override `$primaryKey = 'employee_id'` and don't have an `id` column at all | [`Auditable.php:36`](../../backend/app/Tenants/Traits/Auditable.php#L36) — `$this->getKey()` instead of `$this->id`. Honors `$primaryKey` regardless of column name |
+| `relation "employee_education" does not exist` | Eloquent inflector treats "education" as uncountable, so `EmployeeEducation` defaulted to `employee_education`; migration created `employee_educations` (plural) | [`EmployeeEducation.php`](../../backend/app/Tenants/Modules/HRM/Models/EmployeeEducation.php) — explicit `protected $table = 'employee_educations'` |
+| `function max(uuid) does not exist` on response build | `hasOne(...)->latestOfMany('created_at')` still generates a `MAX(id)` tiebreaker subquery, hardcoded in Laravel's `HasOneOrMany::ofMany`. Our PKs are UUIDs | [`Employee.php::activeContract`](../../backend/app/Tenants/Modules/HRM/Models/Employee.php) — dropped `latestOfMany()`, plain `hasOne` + `where('status', 'active')`. Business rule guarantees at most one active per employee |
+| Edit form shows `id_card_number` (and other PII) blank even when value exists | `id_card_number`, `national_id`, `bank_account`, `tax_id` are in the model's `$hidden` array (correctly stripped from list endpoints), but the detail endpoint also stripped them, leaving the edit form with nothing to pre-fill | [`EmployeeController::show`](../../backend/app/Tenants/Modules/HRM/Controllers/EmployeeController.php) — `$employee->makeVisible(['national_id', 'id_card_number', 'bank_account', 'tax_id'])` selectively exposes PII on the detail endpoint only. TODO: gate behind `hrm.employee.pii_read` policy once HRM policies land |
+| `Class "Aws\S3\S3Client" not found` 500 on first upload presign | Dockerfile pins `composer install` to the lockfile; I'd edited `composer.json` to add `league/flysystem-aws-s3-v3` but the running container's vendor named volume still held the old contents (the volume mount masks the image's baked-in vendor) | One-time fix: `docker compose exec app composer install --no-scripts` to populate the volume. Documented as a gotcha in [`backend/README.md`](../../backend/README.md) |
+| `compose build app exit 4` | composer.lock out of sync after editing composer.json (host PHP is 7.4 so I can't run composer locally) | One-off `docker run --rm -v ./backend:/app -w /app composer:2 update league/flysystem-aws-s3-v3 --with-all-dependencies` regenerated the lock |
+
+### Frontend conventions established this session
+
+- **Date display**: every API datetime now flows through
+  [`composables/useDateFormatter.ts`](../../frontend/composables/useDateFormatter.ts).
+  Token-based `formatDate(value, format = 'DD-MM-yyyy')` and
+  `formatDateTime(value, format = 'DD-MM-yyyy HH:mm')` — both auto-imported
+  by Nuxt. Removed the local shadow `formatDate` from
+  [`pages/iam/audit-logs/index.vue`](../../frontend/pages/iam/audit-logs/index.vue)
+  that was outputting `Jan 26, 2026, 10:15` (locale-dependent). Replaced
+  the generic `fmt(...)` wrapper on dates in the employee detail page.
+- **Fonts**: [`assets/css/main.css`](../../frontend/assets/css/main.css)
+  now loads **Inter** for Latin and **Kantumruy Pro** for Khmer (replaced
+  Noto Sans Khmer). `:lang(km)` swaps the font stack when
+  [`app.vue`](../../frontend/app.vue) updates `<html lang>` reactively
+  from `useI18n().locale`. Form controls get `font-family: inherit` and
+  `--p-font-family` is set so PrimeVue components inherit too.
+- **Component auto-import prefix**: components under
+  `~/components/{folder}/` get a folder-name prefix in templates — e.g.
+  `components/hrm/EmployeeWizardForm.vue` is `<HrmEmployeeWizardForm>`,
+  not `<EmployeeWizardForm>`. To disable, add `components: [{ path:
+  '~/components', pathPrefix: false }]` to `nuxt.config.ts`.
+
 ### What still needs your hands
 
-- Run `docker compose exec app php artisan tenants:migrate` to apply the
-  6 new tenant migrations on existing tenants.
-- Test the full submit against a fresh employee — verify rows land in
-  `employees`, `employee_addresses` (3 rows: current/permanent/emergency),
-  `employee_spouses`, `employee_emergency_contacts`, `employee_educations`,
-  `employee_contracts`.
 - Pest tests for the integration (P0 isolation + transaction rollback on
   partial failure) are still outstanding.
-- The employee detail page ([[id]/index.vue](../../frontend/pages/hrm/employees/[id]/index.vue))
-  doesn't yet render the new sections — it only shows notes / documents /
-  leave balances. Wiring those tabs is a follow-up.
+- Per-permission policy gating (`hrm.employee.write`, `hrm.employee.pii_read`, etc.)
+  is NOT yet wired on HRM routes — currently `auth:api` only. The
+  `makeVisible(...)` PII-unhide on the detail endpoint is gated only by
+  authentication right now.
+- The wizard's contract section creates ONE active contract. A future
+  "Renew contract" action should roll the active row to `expired` and
+  create a fresh one with new dates.
+- Educations are hard-replaced on update. If we add an inline multi-row
+  UI, switch to diff-by-id.
+- Photo lifecycle on employee soft-delete — the bucket object still
+  exists after `DELETE /api/hrm/employees/{id}` (soft delete). A queued
+  job that removes the object after the retention window would close
+  the loop.

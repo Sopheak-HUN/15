@@ -2,7 +2,9 @@
 
 @import "tailwindcss" layer(tailwindcss);
 @import "primeicons/primeicons.css";
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;500;600;700&display=swap");
+/* Inter for Latin, Kantumruy Pro for Khmer script. The :lang(km) rule
+   below swaps the stack order so each language gets its primary font. */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700&display=swap");
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -10,8 +12,12 @@
    bg-primary-500 / text-surface-700 / border-surface-200 etc. resolve.
    PrimeVue emits --p-{token}; Tailwind 4 reads --color-{token}. */
 @theme {
-  --font-sans: "Inter", "Noto Sans Khmer", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+  --font-sans: "Inter", "Kantumruy Pro", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Exposed as the `font-khmer` Tailwind utility for places that should
+     force the Khmer face regardless of the active locale (e.g. a
+     bilingual chip showing both names). */
+  --font-khmer: "Kantumruy Pro", "Inter", ui-sans-serif, system-ui, sans-serif;
 
   --color-primary-50: var(--p-primary-50);
   --color-primary-100: var(--p-primary-100);
@@ -47,4 +53,49 @@ body,
 
 body {
   font-family: var(--font-sans);
+}
+
+/* Form controls (input, textarea, button, select) have user-agent
+   default fonts and do NOT inherit `font-family` from body. Without
+   this rule, PrimeVue's InputText / Button / Textarea / Select render
+   in the OS default sans, not Inter. The :where() wrapper keeps the
+   selector specificity at 0 so any later override still wins. */
+:where(input, textarea, button, select, optgroup) {
+  font-family: inherit;
+}
+
+/* When @nuxtjs/i18n switches the active locale to `km`, it updates
+   <html lang="km"> on the fly. The :lang(km) selector cascades the
+   Khmer-first font stack down through every descendant element.
+   The [lang="km"] selector also matches elements with an explicit
+   lang attribute (e.g. inline Khmer text in an EN page). */
+:lang(km),
+[lang="km"] {
+  font-family: var(--font-khmer);
+}
+
+/* Icon fonts must never inherit the locale font stack — PrimeIcons
+   uses its own `primeicons` font family whose glyphs are at private-use
+   codepoints, and Kantumruy Pro doesn't include them. Without this
+   override every <i class="pi pi-*"> renders as a .notdef tofu box
+   the moment the locale flips to Khmer.
+
+   The `!important` is intentional: PrimeIcons' own stylesheet ships
+   the same family declaration without `!important`, so any later
+   cascade rule (including ours) would otherwise win. */
+.pi,
+[class^="pi-"],
+[class*=" pi-"] {
+  font-family: 'primeicons' !important;
+}
+
+/* Belt-and-suspenders: tell PrimeVue v4's own design-token to use our
+   stack so any component that reads --p-font-family directly (rather
+   than inheriting) picks Inter/Kantumruy Pro instead of its bundled
+   default. */
+:root {
+  --p-font-family: var(--font-sans);
+}
+:root:lang(km) {
+  --p-font-family: var(--font-khmer);
 }

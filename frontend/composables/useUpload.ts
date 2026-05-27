@@ -56,5 +56,91 @@ export function useUpload() {
     return presign.key
   }
 
-  return { uploadEmployeePhoto }
+  /**
+   * Upload an employee document (PDF, image, Office doc, CSV, zip) up
+   * to 10 MB. Unlike photos, this lane writes directly into the
+   * tenant's permanent prefix because the employee_id is known at
+   * upload time (the dialog opens from the detail page).
+   *
+   * Returns the object key + the autoresolved mime/size so the caller
+   * can pre-fill the metadata form.
+   */
+  const uploadEmployeeDocument = async (
+    employeeId: string,
+    file: File,
+  ): Promise<{ key: string; mime: string; size: number }> => {
+    const allowed = new Set([
+      'application/pdf',
+      'image/jpeg', 'image/png',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/csv',
+      'application/zip',
+    ])
+    if (!allowed.has(file.type)) {
+      throw new Error(`Unsupported file type: ${file.type || 'unknown'}`)
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error('File must be 10 MB or smaller')
+    }
+
+    const presign = await api.post<PresignResp>('/api/uploads/employee-document', {
+      employee_id: employeeId,
+      mime: file.type,
+      size: file.size,
+    })
+
+    const put = await fetch(presign.upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    })
+    if (!put.ok) {
+      throw new Error(`Upload failed (${put.status} ${put.statusText})`)
+    }
+    return { key: presign.key, mime: file.type, size: file.size }
+  }
+
+  /**
+   * Upload a leave-request reference file (medical certificate,
+   * travel confirmation, etc.). Accepts PDF, image, or Word doc up to
+   * 10 MB. Lands under the requester's per-employee prefix.
+   */
+  const uploadLeaveReference = async (
+    employeeId: string,
+    file: File,
+  ): Promise<{ key: string; mime: string; size: number }> => {
+    const allowed = new Set([
+      'application/pdf',
+      'image/jpeg', 'image/png',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ])
+    if (!allowed.has(file.type)) {
+      throw new Error(`Unsupported file type: ${file.type || 'unknown'}`)
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error('File must be 10 MB or smaller')
+    }
+
+    const presign = await api.post<PresignResp>('/api/uploads/leave-reference', {
+      employee_id: employeeId,
+      mime: file.type,
+      size: file.size,
+    })
+
+    const put = await fetch(presign.upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    })
+    if (!put.ok) {
+      throw new Error(`Upload failed (${put.status} ${put.statusText})`)
+    }
+    return { key: presign.key, mime: file.type, size: file.size }
+  }
+
+  return { uploadEmployeePhoto, uploadEmployeeDocument, uploadLeaveReference }
 }

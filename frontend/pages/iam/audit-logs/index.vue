@@ -4,7 +4,7 @@ import type { AuditLog } from '~/types/iam'
 definePageMeta({ middleware: 'auth' })
 
 const iam = useIamApi()
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const { data, pending, refresh } = await useAsyncData('iam-audit-logs', () => iam.listAuditLogs())
 
 const logs = computed<AuditLog[]>(() => data.value?.data.data ?? [])
@@ -23,13 +23,6 @@ const actionSeverity = (action: string): 'success' | 'info' | 'warn' | 'danger' 
   if (action.startsWith('updated')) return 'info'
   if (action.startsWith('deleted')) return 'danger'
   return 'secondary'
-}
-
-const formatDate = (iso: string) => {
-  return new Date(iso).toLocaleString(locale.value, {
-    year: 'numeric', month: 'short', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  })
 }
 
 const shortType = (full: string) => full.split('\\').pop() ?? full
@@ -71,7 +64,7 @@ const shortType = (full: string) => full.split('\\').pop() ?? full
 
           <Column field="created_at" :header="t('audit.columns.when')" sortable :style="{ width: '200px' }">
             <template #body="{ data }">
-              <span class="font-mono text-xs">{{ formatDate(data.created_at) }}</span>
+              <span class="font-mono text-xs">{{ formatDateTime(data.created_at, 'DD-MM-yyyy HH:mm:ss') }}</span>
             </template>
           </Column>
           <Column field="action" :header="t('audit.columns.action')" :style="{ width: '120px' }">
@@ -99,7 +92,7 @@ const shortType = (full: string) => full.split('\\').pop() ?? full
         <div class="grid grid-cols-2 gap-4 text-sm">
           <div>
             <div class="text-xs uppercase text-surface-500">{{ t('audit.columns.when') }}</div>
-            <div class="font-mono">{{ formatDate(selectedLog.created_at) }}</div>
+            <div class="font-mono">{{ formatDateTime(selectedLog.created_at, 'DD-MM-yyyy HH:mm:ss') }}</div>
           </div>
           <div>
             <div class="text-xs uppercase text-surface-500">{{ t('audit.columns.action') }}</div>

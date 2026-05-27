@@ -33,7 +33,10 @@ trait Auditable
             'user_id' => $userId,
             'action' => $action,
             'auditable_type' => get_class($this),
-            'auditable_id' => $this->id,
+            // `getKey()` honors the model's $primaryKey — works for both the
+            // default `id` column and 1:1 tables like EmployeeSpouse /
+            // EmployeeEmergencyContact whose PK is `employee_id`.
+            'auditable_id' => $this->getKey(),
             'old_values' => $action === 'updated' ? json_encode($this->getOriginal()) : null,
             'new_values' => $action !== 'deleted' ? json_encode($this->getAttributes()) : null,
         ]);

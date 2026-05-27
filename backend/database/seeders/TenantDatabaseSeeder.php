@@ -104,6 +104,21 @@ class TenantDatabaseSeeder extends Seeder
 
         $superAdmin->permissions()->sync(Permission::pluck('id')->toArray());
 
+        // Staff baseline: an ordinary employee should be able to clock in,
+        // see their own attendance, and submit/track leave requests. They
+        // do NOT get hrm.employee.read because that would let them browse
+        // the entire org chart — keep that admin-only until we add a
+        // dedicated `hrm.employee.read_own` perm.
+        $staffPermNames = [
+            'hrm.attendance.read',
+            'hrm.attendance.write',
+            'hrm.leave.read',
+            'hrm.leave.write',
+            'hrm.payroll.read',
+        ];
+        $staffPermIds = Permission::whereIn('name', $staffPermNames)->pluck('id')->all();
+        $staffRole->permissions()->sync($staffPermIds);
+
         $admin = User::firstOrCreate(
             ['email' => 'admin@erp.local'],
             ['name' => 'ERP Administrator', 'handle' => 'admin', 'password' => Hash::make('Admin@1234!'), 'is_active' => true]

@@ -112,3 +112,4 @@ All available API endpoints are documented in the unified Postman collection loc
 - [API authentication & tenant identification](../docs/api-authentication.md)
 - [Object storage (MinIO/S3) architecture & presigned-URL flow](../docs/object-storage.md)
 - [HRM employee creation wizard ↔ backend integration](../docs/hrm-employee-creation.md)
+- [Frontend conventions (dates, fonts, component naming)](../docs/frontend-conventions.md)

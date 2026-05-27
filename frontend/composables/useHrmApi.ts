@@ -38,13 +38,30 @@ export function useHrmApi() {
     listEmployees: (params: { q?: string; department_id?: string; status?: string; per_page?: number; page?: number } = {}) =>
       api.get<PaginatedResp<Employee>>('/api/hrm/employees' + qs(params)),
     showEmployee:    (id: string) => api.get<{ data: Employee }>(`/api/hrm/employees/${id}`),
-    createEmployee:  (body: Partial<Employee> & Record<string, unknown>) =>
+    // Returns the employee row linked to the current user, or null when
+    // the user has no linked profile (e.g. fresh admin account).
+    me: () => api.get<{ data: Employee | null }>('/api/hrm/me'),
+    // The wizard's create/update payload nests sub-blocks (current_address,
+    // spouse, emergency_contact, contract, etc.) whose shape is the
+    // *inner* fields only — not the full relation rows that come back on
+    // read. Typing this as Partial<Employee> would force the caller to
+    // invent fake `id`/`employee_id` on each sub-block, so we keep the
+    // write surface loose.
+    createEmployee:  (body: Record<string, unknown>) =>
       api.post<{ success: boolean; data: Employee }>('/api/hrm/employees', body),
-    updateEmployee:  (id: string, body: Partial<Employee> & Record<string, unknown>) =>
+    updateEmployee:  (id: string, body: Record<string, unknown>) =>
       api.put<{ success: boolean; data: Employee }>(`/api/hrm/employees/${id}`, body),
     terminateEmployee: (id: string, body: { reason?: string; effective_at?: string } = {}) =>
       api.del<{ success: boolean }>(`/api/hrm/employees/${id}`, { body } as never),
     restoreEmployee: (id: string) => api.post<{ success: boolean; data: Employee }>(`/api/hrm/employees/${id}/restore`),
+    createUserForEmployee: (id: string, body: { email: string; password: string; role_id: string; handle?: string }) =>
+      api.post<{
+        success: boolean
+        data: {
+          user: { id: string; name: string; email: string; handle: string | null; role_id: string; is_active: boolean }
+          employee: Employee
+        }
+      }>(`/api/hrm/employees/${id}/user`, body),
 
     // ----- Leave -----
     listLeaveTypes:   () => api.get<ListResp<LeaveType>>('/api/hrm/leave-types'),
@@ -55,7 +72,19 @@ export function useHrmApi() {
 
     listLeaveRequests: (params: { status?: string; employee_id?: string; from?: string; to?: string; per_page?: number; page?: number } = {}) =>
       api.get<PaginatedResp<LeaveRequest>>('/api/hrm/leave-requests' + qs(params)),
-    submitLeaveRequest: (body: { employee_id: string; leave_type_id: string; start_date: string; end_date: string; days?: number; reason?: string }) =>
+    showLeaveRequest: (id: string) =>
+      api.get<{ data: LeaveRequest }>(`/api/hrm/leave-requests/${id}`),
+    submitLeaveRequest: (body: {
+      employee_id: string
+      leave_type_id: string
+      duration_type?: 'full_day' | 'half_day'
+      start_date: string
+      end_date: string
+      days?: number
+      reason?: string
+      assign_to?: string | null
+      reference_path?: string | null
+    }) =>
       api.post<{ success: boolean; data: LeaveRequest }>('/api/hrm/leave-requests', body),
     approveLeaveRequest: (id: string) =>
       api.post<{ success: boolean; data: LeaveRequest }>(`/api/hrm/leave-requests/${id}/approve`),

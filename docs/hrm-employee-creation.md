@@ -1,9 +1,26 @@
-# HRM — Employee Creation Wizard
+# HRM — Employee Creation & Editing
 
-How the 7-step Nuxt wizard at
-[`frontend/pages/hrm/employees/create.vue`](../frontend/pages/hrm/employees/create.vue)
-talks to the Laravel backend at `POST /api/hrm/employees`, including
-the structured Cambodia geography cascade and the MinIO photo upload.
+How the 7-step Nuxt wizard talks to the Laravel backend at
+`POST /api/hrm/employees` (create) and `PUT /api/hrm/employees/{id}`
+(edit), including the structured Cambodia geography cascade and the
+MinIO photo upload.
+
+The wizard form lives in a single reusable component:
+[`components/hrm/EmployeeWizardForm.vue`](../frontend/components/hrm/EmployeeWizardForm.vue).
+Three pages consume it (Nuxt auto-prefixes by folder, so the tag is `<HrmEmployeeWizardForm>` in templates):
+
+| Route | File | Mode |
+| --- | --- | --- |
+| `/hrm/employees` | [`pages/hrm/employees/index.vue`](../frontend/pages/hrm/employees/index.vue) | Directory list with avatar column |
+| `/hrm/employees/{id}` | [`pages/hrm/employees/[id]/index.vue`](../frontend/pages/hrm/employees/[id]/index.vue) | Read-only detail (Profile / Notes / Documents / Leave tabs) |
+| `/hrm/employees/create` | [`pages/hrm/employees/create.vue`](../frontend/pages/hrm/employees/create.vue) | `<HrmEmployeeWizardForm />` (default create mode) |
+| `/hrm/employees/{id}/edit` | [`pages/hrm/employees/[id]/edit.vue`](../frontend/pages/hrm/employees/[id]/edit.vue) | `<HrmEmployeeWizardForm mode="edit" :initial="employee" />` |
+
+In edit mode the component pre-populates every field from the API response (including the 3 geo cascades, the photo preview from `photo_url`, and the active contract), and the submit button label flips to "Save changes". Photo upload is optional in edit mode — leaving the existing photo untouched means no `photo_temp_key` is sent and the backend keeps the current key.
+
+**List page** shows an avatar (presigned `photo_url`) + name + email in a single linked cell. Initials fallback renders when `photo_path` is null. `<img loading="lazy">` so off-screen rows don't hammer the bucket.
+
+**Detail page Profile tab** stacks every wizard section as a read-only `<Card>`: Identity / Contact, Identification, Personal + Spouse, Addresses (current + permanent, 2-col grid), Emergency contact + address, Education history, Contracts table with active/expired/terminated tags. The page calls `useCambodiaGeo()` on mount to resolve province/district/commune/village codes back to human-readable names — fetches are cached per parent code so refreshes are cheap.
 
 ## 1. The wizard
 
@@ -205,7 +222,21 @@ cd frontend && npm install && npm run dev
 # Open http://localhost:3000/hrm/employees/create
 ```
 
-## 8. Outstanding follow-ups
+## 8. Server-side gotchas worth knowing
+
+Hit (and fixed) while testing the full wizard end-to-end. Documenting so the next module doesn't repeat them.
+
+| Symptom | Why it happened | The pattern that fixes it |
+| --- | --- | --- |
+| `duplicate key (TT-XXXX) already exists` on create | Auto-id generator's `MAX(employee_id)` was scoped through Eloquent's `SoftDeletes`. Terminated employees still occupy their unique-index slot, so the generator handed out a colliding ID | `Employee::withTrashed()->...` when computing the next sequence. Don't recycle IDs of terminated employees (audit-trail safety) |
+| `null in column auditable_id` when inserting `EmployeeSpouse` / `EmployeeEmergencyContact` | The `Auditable` trait read `$this->id` directly, but 1:1 models override `$primaryKey = 'employee_id'` and have no `id` column at all | `$this->getKey()` honors `$primaryKey` regardless of column name |
+| `relation "employee_education" does not exist` | Eloquent's inflector marks "education" as **uncountable**, so `EmployeeEducation` defaulted to `employee_education`. Migration was `employee_educations` (plural) | Always set `protected $table` explicitly on models whose name pluralizes irregularly |
+| `function max(uuid) does not exist` | `hasOne(...)->latestOfMany('created_at')` still emits `MAX(id)` as a tiebreaker — hardcoded in Laravel's `HasOneOrMany::ofMany`. UUIDs aren't comparable as numbers in Postgres | Don't use `latestOfMany()` with UUID PKs. Use plain `hasOne` + filter, or build a custom query method |
+| Edit form shows PII (national_id, etc.) blank even when set | Model's `$hidden` strips them from EVERY JSON response, including detail | `$employee->makeVisible([...])` on the detail endpoint only. Keeps list endpoints safe |
+| `Class "Aws\S3\S3Client" not found` 500 after adding a composer dep | The `erp_vendor` named volume mounted over `/var/www/vendor` MASKS the image's baked-in vendor. Rebuilding the image isn't enough — the running container still reads the volume | After ANY change to `composer.json`/`composer.lock`: `docker compose exec app composer install --no-scripts` to sync the volume. Documented in [`backend/README.md`](../backend/README.md) |
+| `compose build app exit 4` after adding a dep | `composer install --no-dev` is lockfile-strict; lock was stale because host PHP didn't match project requirements | Regenerate the lock inside a throwaway container: `docker run --rm -v ./backend:/app -w /app composer:2 update <pkg> --with-all-dependencies` |
+
+## 9. Outstanding follow-ups
 
 - **Detail page** ([`[id]/index.vue`](../frontend/pages/hrm/employees/[id]/index.vue)) doesn't yet render the new sections — it only shows notes, documents, and leave balances. Wiring tabs for the wizard data is a follow-up.
 - **Pest tests** — P0 tenancy isolation + transaction rollback on partial failure are still outstanding.
@@ -213,7 +244,7 @@ cd frontend && npm install && npm run dev
 - **Thumbnail pipeline** — photos are stored at upload size. A queued `intervention/image` job that writes `/photo-200.jpg` and `/photo-800.jpg` would let the listing page load smaller blobs.
 - **Cross-tenant copy abuse via stolen `photo_temp_key`** — currently blocked at the prefix level (must start with `uploads/`). Adding a session-scoped token to the upload presign would tighten this further if the threat model demands it.
 
-## 9. Cross-references
+## 10. Cross-references
 
 - [docs/object-storage.md](./object-storage.md) — MinIO/S3 architecture, dev/prod swap, security model.
 - [docs/api-authentication.md](./api-authentication.md) — tenant + auth headers (every HRM call needs them).

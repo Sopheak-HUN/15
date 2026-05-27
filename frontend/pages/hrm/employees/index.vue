@@ -127,7 +127,7 @@ const onRestore = (row: Employee) => {
             <div class="py-10 text-center text-surface-500">{{ t('hrm.common.noResults') }}</div>
           </template>
 
-          <Column field="employee_id" :header="t('hrm.employees.columns.employeeId')" sortable>
+          <Column field="employee_id" :header="t('hrm.employees.columns.employeeId')" sortable :style="{ width: '120px' }">
             <template #body="{ data }">
               <NuxtLink :to="`/hrm/employees/${data.id}`" class="text-primary-600 hover:underline">
                 <code class="font-mono text-xs">{{ data.employee_id }}</code>
@@ -136,10 +136,29 @@ const onRestore = (row: Employee) => {
           </Column>
           <Column :header="t('hrm.employees.columns.fullName')">
             <template #body="{ data }">
-              <NuxtLink :to="`/hrm/employees/${data.id}`" class="font-medium hover:text-primary-600">
-                {{ data.first_name }} {{ data.last_name }}
+              <NuxtLink :to="`/hrm/employees/${data.id}`" class="flex items-center gap-3 group">
+                <!-- Avatar: presigned GET URL from the model accessor; falls
+                     back to initials when photo_path is null. -->
+                <img
+                  v-if="data.photo_url"
+                  :src="data.photo_url"
+                  :alt="`${data.first_name} ${data.last_name}`"
+                  class="w-9 h-9 rounded-full object-cover ring-1 ring-surface-200 dark:ring-surface-700 flex-shrink-0"
+                  loading="lazy"
+                >
+                <div
+                  v-else
+                  class="w-9 h-9 rounded-full bg-primary-100 dark:bg-primary-950 text-primary-700 dark:text-primary-300 flex items-center justify-center text-xs font-semibold uppercase ring-1 ring-primary-200 dark:ring-primary-900 flex-shrink-0"
+                >
+                  {{ (data.first_name?.[0] ?? '') + (data.last_name?.[0] ?? '') }}
+                </div>
+                <div class="min-w-0">
+                  <div class="font-medium group-hover:text-primary-600 truncate">
+                    {{ data.first_name }} {{ data.last_name }}
+                  </div>
+                  <div class="text-xs text-surface-500 truncate">{{ data.email }}</div>
+                </div>
               </NuxtLink>
-              <div class="text-xs text-surface-500">{{ data.email }}</div>
             </template>
           </Column>
           <Column :header="t('hrm.employees.columns.department')">

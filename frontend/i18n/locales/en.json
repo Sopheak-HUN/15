@@ -11,6 +11,7 @@
     "create": "Create",
     "delete": "Delete",
     "edit": "Edit",
+    "close": "Close",
     "refresh": "Refresh",
     "search": "Search...",
     "loading": "Loading…",
@@ -70,6 +71,14 @@
     "mfa": "Two-Factor Auth",
     "signOut": "Sign out",
     "signedOut": "Signed out"
+  },
+  "errors": {
+    "forbidden": {
+      "title": "Access denied",
+      "subtitle": "Your role doesn't have permission to view this page. Contact an administrator if you think this is a mistake.",
+      "goHome": "Go to dashboard",
+      "back": "Go back"
+    }
   },
   "auth": {
     "login": {
@@ -279,6 +288,8 @@
       "manager": "Manager",
       "saveFailed": "Save failed",
       "deleteFailed": "Delete failed",
+      "loadFailed": "Could not load",
+      "loading": "Loading…",
       "confirmDelete": "Delete \"{name}\"? This cannot be undone.",
       "confirmHeader": "Confirm deletion",
       "search": "Search by name, code, or email",
@@ -293,6 +304,9 @@
       "new": "Add employee",
       "manageDepts": "Manage departments",
       "managePositions": "Manage positions",
+      "tabs": {
+        "profile": "Profile"
+      },
       "columns": {
         "employeeId": "Employee ID",
         "fullName": "Name",
@@ -464,6 +478,8 @@
       "wizard": {
         "title": "Onboard new employee",
         "subtitle": "Step-by-step employee creation. All required fields must be filled to advance.",
+        "editTitle": "Edit employee",
+        "editSubtitle": "Update an existing employee. Sections you don't touch are left as-is on the server.",
         "steps": {
           "basic": "Basic info",
           "basicHint": "Personal & employment essentials",
@@ -487,6 +503,7 @@
           "next": "Next",
           "back": "Back",
           "submit": "Create employee",
+          "update": "Save changes",
           "cancel": "Cancel"
         },
         "errors": {
@@ -580,6 +597,7 @@
         "name": "e.g. Engineering",
         "code": "ENG",
         "parent": "No parent (top-level)",
+        "manager": "Pick a department manager",
         "description": "Short description of the department"
       },
       "toast": {
@@ -656,7 +674,8 @@
         "employee": "Pick an employee",
         "type": "Pick a leave type",
         "days": "Auto-calculated",
-        "reason": "Reason (optional)",
+        "reason": "Why are you requesting time off?",
+        "assignTo": "Colleague who'll cover your work (optional)",
         "rejectReason": "Why is this being rejected?",
         "typeName": "e.g. Annual Leave",
         "typeCode": "ANNUAL",
@@ -665,17 +684,29 @@
       },
       "form": {
         "employee": "Employee",
+        "pickEmployeeFirst": "Pick an employee first",
+        "noLinkedEmployee": "Your user account isn't linked to an employee profile yet. Contact HR.",
         "type": "Leave type",
         "startDate": "Start date",
         "endDate": "End date",
         "days": "Days",
         "daysHint": "Leave blank to auto-calculate from the date range.",
+        "daysComputed": "{n} calendar day(s) inclusive of start and end.",
+        "daysReset": "Reset",
         "reason": "Reason"
       },
       "actions": {
         "approve": "Approve",
         "reject": "Reject",
         "rejectReason": "Rejection reason"
+      },
+      "detail": {
+        "title": "Leave request",
+        "approver": "Approved by",
+        "approvedAt": "Approved at",
+        "submittedAt": "Submitted at",
+        "openReference": "Open reference file",
+        "rejectionReason": "Rejection reason"
       },
       "toast": {
         "submitted": "Leave request submitted",
@@ -1053,6 +1084,7 @@
         "fields": {
           "title": "Title",
           "category": "Category",
+          "file": "File",
           "filePath": "File path",
           "filePathHint": "Relative path inside the tenant storage disk.",
           "mimeType": "Mime type",
@@ -1066,6 +1098,12 @@
           "certificate": "Certificate",
           "other": "Other"
         },
+        "actions": {
+          "download": "Download"
+        },
+        "uploading": "Uploading…",
+        "dropHint": "Click to choose a file",
+        "dropMeta": "PDF, image, Office doc, CSV or ZIP · up to 10 MB",
         "expiringSoon": "Expiring within 30 days"
       },
       "toast": {
@@ -1073,7 +1111,37 @@
         "noteUpdated": "Note updated",
         "noteDeleted": "Note deleted",
         "docCreated": "Document recorded",
-        "docDeleted": "Document deleted"
+        "docDeleted": "Document deleted",
+        "fileUploaded": "File uploaded",
+        "uploadFailed": "Upload failed"
+      }
+    },
+    "users": {
+      "account": "User account",
+      "createAccount": "Create user account",
+      "dialogTitle": "Create user account",
+      "passwordHint": "At least 8 characters. Click Generate for a strong default.",
+      "fields": {
+        "email": "Email",
+        "password": "Password",
+        "role": "Role"
+      },
+      "placeholders": {
+        "email": "employee{'@'}company.com",
+        "password": "Min. 8 characters",
+        "role": "Pick a role"
+      },
+      "actions": {
+        "createAccount": "Create account",
+        "generate": "Generate",
+        "copy": "Copy password",
+        "showPassword": "Show password",
+        "hidePassword": "Hide password"
+      },
+      "toast": {
+        "created": "User account created",
+        "passwordCopied": "Password copied",
+        "rolesLoadFailed": "Could not load roles"
       }
     },
     "attendance": {

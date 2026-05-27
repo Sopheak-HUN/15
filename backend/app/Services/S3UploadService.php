@@ -63,6 +63,94 @@ class S3UploadService
     }
 
     /**
+     * Sign a 10-minute presigned PUT URL for an employee document. Unlike
+     * the photo path, we KNOW the employee's UUID here (the dialog opens
+     * on an existing employee), so the upload writes straight to the
+     * tenant's permanent prefix:
+     *   tenants/{handle}/employees/{employee_id}/documents/{nanoid}.{ext}
+     *
+     * No temp-commit dance needed. If the user closes the dialog without
+     * saving the metadata row, the object is orphaned. We'll add a
+     * sweep job later; the bucket's storage cost is negligible at our
+     * scale.
+     */
+    public function signEmployeeDocumentPut(string $employeeId, string $mime, int $maxBytes = 10 * 1024 * 1024): array
+    {
+        $ext = match ($mime) {
+            'application/pdf'                                                              => 'pdf',
+            'image/jpeg'                                                                   => 'jpg',
+            'image/png'                                                                    => 'png',
+            'application/msword'                                                           => 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'      => 'docx',
+            'application/vnd.ms-excel'                                                     => 'xls',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'            => 'xlsx',
+            'text/csv'                                                                     => 'csv',
+            'application/zip'                                                              => 'zip',
+            default                                                                        => throw new \DomainException('Unsupported document type: ' . $mime),
+        };
+
+        $handle = function_exists('tenant') && tenant('handle') ? tenant('handle') : 'unknown';
+        $key    = "tenants/{$handle}/employees/{$employeeId}/documents/" . Str::random(40) . '.' . $ext;
+
+        $client = $this->publicClient();
+        $cmd = $client->getCommand('PutObject', [
+            'Bucket'        => $this->bucket(),
+            'Key'           => $key,
+            'ContentType'   => $mime,
+            'ContentLength' => $maxBytes,
+        ]);
+        $request = $client->createPresignedRequest($cmd, '+10 minutes');
+
+        return [
+            'upload_url' => (string) $request->getUri(),
+            'key'        => $key,
+            'mime'       => $mime,
+            'max_bytes'  => $maxBytes,
+            'expires_in' => 600,
+        ];
+    }
+
+    /**
+     * Sign a 10-minute presigned PUT URL for a leave-request reference
+     * attachment (medical certificate, travel confirmation, etc.).
+     * Writes straight to the requester's per-employee prefix so the
+     * key carries enough context for audit / cleanup later.
+     *
+     *   tenants/{handle}/employees/{employee_id}/leave-references/{nanoid}.{ext}
+     */
+    public function signLeaveReferencePut(string $employeeId, string $mime, int $maxBytes = 10 * 1024 * 1024): array
+    {
+        $ext = match ($mime) {
+            'application/pdf'                                                              => 'pdf',
+            'image/jpeg'                                                                   => 'jpg',
+            'image/png'                                                                    => 'png',
+            'application/msword'                                                           => 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'      => 'docx',
+            default                                                                        => throw new \DomainException('Unsupported reference file type: ' . $mime),
+        };
+
+        $handle = function_exists('tenant') && tenant('handle') ? tenant('handle') : 'unknown';
+        $key    = "tenants/{$handle}/employees/{$employeeId}/leave-references/" . Str::random(40) . '.' . $ext;
+
+        $client = $this->publicClient();
+        $cmd = $client->getCommand('PutObject', [
+            'Bucket'        => $this->bucket(),
+            'Key'           => $key,
+            'ContentType'   => $mime,
+            'ContentLength' => $maxBytes,
+        ]);
+        $request = $client->createPresignedRequest($cmd, '+10 minutes');
+
+        return [
+            'upload_url' => (string) $request->getUri(),
+            'key'        => $key,
+            'mime'       => $mime,
+            'max_bytes'  => $maxBytes,
+            'expires_in' => 600,
+        ];
+    }
+
+    /**
      * Issue a 5-minute presigned GET URL for a stored object. Used in the
      * Employee resource so the frontend never embeds raw bucket URLs.
      */

@@ -20,6 +20,15 @@ export const useAuthStore = defineStore('auth', {
 
   getters: {
     isAuthenticated: (s) => !!s.token && !!s.tenant,
+    // Convenience accessors for permission checks. These are sourced
+    // entirely from the user payload returned by /api/auth/login — the
+    // backend re-checks every request, so the frontend treats them as
+    // a presentation hint, not a security boundary.
+    permissions: (s): string[] => s.user?.effective_permissions ?? [],
+    roleName: (s): string | null => s.user?.role?.name ?? null,
+    isSuperAdmin(): boolean {
+      return this.roleName === 'super-admin'
+    },
     initials: (s) =>
       s.user
         ? s.user.name
@@ -50,6 +59,8 @@ export const useAuthStore = defineStore('auth', {
       if (import.meta.client) {
         localStorage.setItem(TOKEN_KEY, payload.token)
         localStorage.setItem(TENANT_KEY, payload.tenant)
+        // Persist the full user payload including role + permissions so
+        // a page refresh doesn't strip the sidebar of valid entries.
         localStorage.setItem(USER_KEY, JSON.stringify(payload.user))
       }
     },

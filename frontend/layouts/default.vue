@@ -8,40 +8,72 @@ const toast = useToast()
 const { mode, toggle } = useTheme()
 const { t } = useI18n()
 
-interface NavItem  { label: string; icon: string; to: string }
-interface NavGroup { label: string; key: string; items: NavItem[] }
+// Each entry can declare `requires` — a single permission name or an
+// array (OR semantics, "any one of these is enough"). Entries with no
+// `requires` are visible to every authenticated user. The dashboard
+// stays universally visible so users always have a landing page.
+interface NavItem  { label: string; icon: string; to: string; requires?: string | string[] }
+interface NavGroup { label: string; key: string; items: NavItem[]; requires?: string | string[] }
 type NavEntry = NavItem | NavGroup
 const isGroup = (e: NavEntry): e is NavGroup => 'items' in e
 
-const nav = computed<NavEntry[]>(() => [
-  { label: t('nav.dashboard'), icon: 'pi pi-th-large', to: '/' },
-  {
-    key: 'iam',
-    label: t('nav.groups.iam'),
-    items: [
-      { label: t('nav.roles'),       icon: 'pi pi-id-card', to: '/iam/roles' },
-      { label: t('nav.permissions'), icon: 'pi pi-key',     to: '/iam/permissions' },
-      { label: t('nav.sso'),         icon: 'pi pi-shield',  to: '/iam/sso' },
-      { label: t('nav.auditLogs'),   icon: 'pi pi-history', to: '/iam/audit-logs' },
-      { label: t('nav.branding'),    icon: 'pi pi-palette', to: '/iam/branding' },
-    ],
-  },
-  {
-    key: 'hrm',
-    label: t('nav.groups.hrm'),
-    items: [
-      { label: t('nav.employees'),   icon: 'pi pi-users',      to: '/hrm/employees' },
-      { label: t('nav.departments'), icon: 'pi pi-sitemap',    to: '/hrm/departments' },
-      { label: t('nav.positions'),   icon: 'pi pi-bookmark',   to: '/hrm/positions' },
-      { label: t('nav.leave'),       icon: 'pi pi-calendar',   to: '/hrm/leave' },
-      { label: t('nav.attendance'),  icon: 'pi pi-clock',      to: '/hrm/attendance' },
-      { label: t('nav.payroll'),     icon: 'pi pi-dollar',     to: '/hrm/payroll' },
-      { label: t('nav.recruitment'), icon: 'pi pi-briefcase',  to: '/hrm/recruitment' },
-      { label: t('nav.performance'), icon: 'pi pi-chart-line', to: '/hrm/performance' },
-      { label: t('nav.suggestions'), icon: 'pi pi-comment',    to: '/hrm/suggestions' },
-    ],
-  },
-])
+const { hasAny } = usePermissions()
+
+// Strict OR semantics: an entry is shown when no `requires` is set, OR
+// when at least one of the listed perms is held.
+const canSee = (req?: string | string[]) => {
+  if (!req) return true
+  const list = Array.isArray(req) ? req : [req]
+  return hasAny(...list)
+}
+
+const nav = computed<NavEntry[]>(() => {
+  const raw: NavEntry[] = [
+    { label: t('nav.dashboard'), icon: 'pi pi-th-large', to: '/' },
+    {
+      key: 'iam',
+      label: t('nav.groups.iam'),
+      items: [
+        { label: t('nav.roles'),       icon: 'pi pi-id-card', to: '/iam/roles',       requires: 'iam.roles.view' },
+        { label: t('nav.permissions'), icon: 'pi pi-key',     to: '/iam/permissions', requires: 'iam.permissions.view' },
+        // SSO / audit / branding don't have dedicated perms yet — they
+        // ride on iam.roles.* as the "IAM admin" proxy, matching the
+        // backend route gates.
+        { label: t('nav.sso'),         icon: 'pi pi-shield',  to: '/iam/sso',         requires: 'iam.roles.edit' },
+        { label: t('nav.auditLogs'),   icon: 'pi pi-history', to: '/iam/audit-logs',  requires: 'iam.roles.view' },
+        { label: t('nav.branding'),    icon: 'pi pi-palette', to: '/iam/branding',    requires: 'iam.roles.edit' },
+      ],
+    },
+    {
+      key: 'hrm',
+      label: t('nav.groups.hrm'),
+      items: [
+        { label: t('nav.employees'),   icon: 'pi pi-users',      to: '/hrm/employees',   requires: 'hrm.employee.read' },
+        { label: t('nav.departments'), icon: 'pi pi-sitemap',    to: '/hrm/departments', requires: 'hrm.employee.read' },
+        { label: t('nav.positions'),   icon: 'pi pi-bookmark',   to: '/hrm/positions',   requires: 'hrm.employee.read' },
+        { label: t('nav.leave'),       icon: 'pi pi-calendar',   to: '/hrm/leave',       requires: 'hrm.leave.read' },
+        { label: t('nav.attendance'),  icon: 'pi pi-clock',      to: '/hrm/attendance',  requires: 'hrm.attendance.read' },
+        { label: t('nav.payroll'),     icon: 'pi pi-dollar',     to: '/hrm/payroll',     requires: 'hrm.payroll.read' },
+        { label: t('nav.recruitment'), icon: 'pi pi-briefcase',  to: '/hrm/recruitment', requires: 'hrm.recruitment.read' },
+        { label: t('nav.performance'), icon: 'pi pi-chart-line', to: '/hrm/performance', requires: 'hrm.performance.read' },
+        { label: t('nav.suggestions'), icon: 'pi pi-comment',    to: '/hrm/suggestions', requires: 'hrm.employee.read' },
+      ],
+    },
+  ]
+
+  // Drop hidden items first, then drop entire groups that emptied out.
+  return raw
+    .map((entry) => {
+      if (isGroup(entry)) {
+        return { ...entry, items: entry.items.filter((i) => canSee(i.requires)) }
+      }
+      return entry
+    })
+    .filter((entry) => {
+      if (isGroup(entry)) return entry.items.length > 0
+      return canSee(entry.requires)
+    })
+})
 
 type PopupMenu = { toggle: (event: Event) => void }
 const userMenu = ref<PopupMenu | null>(null)

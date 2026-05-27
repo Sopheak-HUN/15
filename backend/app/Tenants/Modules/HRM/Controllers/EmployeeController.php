@@ -12,6 +12,30 @@ class EmployeeController extends Controller
 {
     public function __construct(protected EmployeeService $service) {}
 
+    /**
+     * Return the Employee row linked to the authenticated user (via
+     * employees.user_id = users.id). Used by self-service screens like
+     * the leave form so a staff member can pre-fill their own employee
+     * record without needing the hrm.employee.read permission.
+     *
+     * Returns 200 with `data: null` rather than 404 when the user has
+     * no linked employee — that's an expected state for new admin
+     * accounts that haven't been provisioned an employee profile yet.
+     */
+    public function me(Request $request)
+    {
+        $userId = $request->user()?->id;
+        if (! $userId) {
+            return response()->json(['data' => null]);
+        }
+
+        $employee = Employee::where('user_id', $userId)
+            ->with(['department:id,name', 'position:id,title'])
+            ->first();
+
+        return response()->json(['data' => $employee]);
+    }
+
     public function index(Request $request)
     {
         $query = Employee::query()
@@ -40,6 +64,15 @@ class EmployeeController extends Controller
 
     public function show(Employee $employee)
     {
+        // PII columns (id_card_number, national_id, bank_account, tax_id)
+        // are in the model's $hidden array so they don't leak through the
+        // index/list endpoint. On the detail endpoint the authenticated
+        // user is editing this specific employee, so we unhide them here
+        // for the edit form to pre-populate.
+        // TODO: gate this on a per-permission policy (hrm.employee.pii_read)
+        // once policies are wired across the HRM routes.
+        $employee->makeVisible(['national_id', 'id_card_number', 'bank_account', 'tax_id']);
+
         return response()->json([
             'data' => $employee->load([
                 'department', 'position',
@@ -87,6 +120,45 @@ class EmployeeController extends Controller
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
         return response()->json(['success' => true, 'data' => $restored]);
+    }
+
+    /**
+     * Provision a tenant user account for this employee and link it via
+     * `employees.user_id`. The frontend wizard collects the email, an
+     * (optionally auto-generated) password, and the role to assign.
+     */
+    public function createUser(Request $request, Employee $employee)
+    {
+        $data = $request->validate([
+            // Email must be unique among non-trashed users — soft-deleted
+            // accounts can keep the same address, matching the partial
+            // unique index we use elsewhere.
+            'email'    => 'required|email|max:160|unique:users,email,NULL,id,deleted_at,NULL',
+            'password' => 'required|string|min:8|max:128',
+            'role_id'  => 'required|uuid|exists:roles,id',
+            'handle'   => 'nullable|string|max:120|unique:users,handle,NULL,id,deleted_at,NULL',
+        ]);
+
+        try {
+            $user = $this->service->createUserAccount($employee, $data);
+        } catch (DomainException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'user' => [
+                    'id'        => $user->id,
+                    'name'      => $user->name,
+                    'email'     => $user->email,
+                    'handle'    => $user->handle,
+                    'role_id'   => $user->role_id,
+                    'is_active' => $user->is_active,
+                ],
+                'employee' => $employee->fresh()?->load('user:id,email,handle'),
+            ],
+        ], 201);
     }
 
     private function rules(?Employee $employee = null): array

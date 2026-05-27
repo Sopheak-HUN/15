@@ -23,6 +23,15 @@ const { data, refresh, pending } = await useAsyncData(
 const rows = computed<Department[]>(() => data.value?.data?.data ?? [])
 const meta = computed(() => data.value?.data)
 
+// Employees list for the Manager picker. Loaded once on mount — small
+// enough that paginating in a dropdown would be overkill. The dropdown
+// is single-select and uses the employee UUID as its value.
+const { data: empData } = await useAsyncData(
+  'hrm-departments-employees',
+  () => hrm.listEmployees({ status: 'active', per_page: 200 }),
+)
+const employees = computed(() => empData.value?.data?.data ?? [])
+
 const dialogOpen = ref(false)
 const editing    = ref<Department | null>(null)
 const saving     = ref(false)
@@ -42,6 +51,7 @@ const { defineField, handleSubmit, errors, resetForm, setValues } = useForm({
 const [name, nameAttrs]         = defineField('name')
 const [code, codeAttrs]         = defineField('code')
 const [parentId, parentAttrs]   = defineField('parent_id')
+const [managerId, managerAttrs] = defineField('manager_id')
 const [description, descAttrs]  = defineField('description')
 const [isActive, isActiveAttrs] = defineField('is_active')
 
@@ -196,9 +206,36 @@ const onDelete = (row: Department) => {
             <InputText v-model="code" v-bind="codeAttrs" class="w-full font-mono" :invalid="!!errors.code" :placeholder="t('hrm.departments.placeholders.code')" />
           </div>
         </div>
-        <div>
-          <FormLabel :label="t('hrm.departments.fields.parent')" />
-          <Select v-model="parentId" v-bind="parentAttrs" :options="parentOptions" option-label="label" option-value="value" show-clear class="w-full" :placeholder="t('hrm.departments.placeholders.parent')" />
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <FormLabel :label="t('hrm.departments.fields.parent')" />
+            <Select v-model="parentId" v-bind="parentAttrs" :options="parentOptions" option-label="label" option-value="value" show-clear class="w-full" :placeholder="t('hrm.departments.placeholders.parent')" />
+          </div>
+          <div>
+            <FormLabel :label="t('hrm.departments.fields.manager')" />
+            <Select
+              v-model="managerId"
+              v-bind="managerAttrs"
+              :options="employees"
+              option-value="id"
+              filter
+              show-clear
+              class="w-full"
+              :placeholder="t('hrm.departments.placeholders.manager')"
+            >
+              <template #option="{ option }">
+                {{ option.first_name }} {{ option.last_name }}
+                <code v-if="option.employee_id" class="font-mono text-xs text-surface-500 ml-1">({{ option.employee_id }})</code>
+              </template>
+              <template #value="{ value }">
+                <span v-if="value">
+                  <span v-for="emp in employees.filter((e) => e.id === value)" :key="emp.id">
+                    {{ emp.first_name }} {{ emp.last_name }}
+                  </span>
+                </span>
+              </template>
+            </Select>
+          </div>
         </div>
         <div>
           <FormLabel :label="t('hrm.departments.fields.description')" />
