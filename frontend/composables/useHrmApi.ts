@@ -1,7 +1,7 @@
 import type {
-  Application, Appraisal, AppraisalCycle, Attendance, AttendanceStats, Department, Employee, EmployeeDocument,
-  EmployeeNote, Interview, InterviewFeedback, LeaveBalance, LeaveRequest, LeaveType,
-  ListResp, PaginatedResp, PayComponent, Payslip, PayrollPeriod, Position, Suggestion,
+  Application, Attendance, AttendanceStats, Department, Employee, EmployeeDocument,
+  EmployeeNote, EmployeePromotion, Interview, InterviewFeedback, LeaveBalance, LeaveRequest, LeaveType,
+  ListResp, PaginatedResp, PayComponent, Payslip, PayrollPeriod, Position, PromotionType,
   Vacancy,
 } from '~/types/hrm'
 
@@ -62,6 +62,25 @@ export function useHrmApi() {
           employee: Employee
         }
       }>(`/api/hrm/employees/${id}/user`, body),
+
+    // ----- Career history (promotions / transfers / salary adjustments) -----
+    listEmployeePromotions: (employeeId: string) =>
+      api.get<ListResp<EmployeePromotion>>(`/api/hrm/employees/${employeeId}/promotions`),
+    createEmployeePromotion: (employeeId: string, body: {
+      effective_date: string
+      type: PromotionType
+      new_position_id?: string | null
+      new_department_id?: string | null
+      new_role_name?: string | null
+      new_salary?: number | null
+      currency?: string | null
+      reason?: string | null
+      approved_by?: string | null
+      apply_now?: boolean
+    }) =>
+      api.post<{ success: boolean; data: EmployeePromotion }>(`/api/hrm/employees/${employeeId}/promotions`, body),
+    deleteEmployeePromotion: (employeeId: string, promotionId: string) =>
+      api.del<{ success: boolean }>(`/api/hrm/employees/${employeeId}/promotions/${promotionId}`),
 
     // ----- Leave -----
     listLeaveTypes:   () => api.get<ListResp<LeaveType>>('/api/hrm/leave-types'),
@@ -148,34 +167,6 @@ export function useHrmApi() {
     storeInterviewFeedback: (interviewId: string, body: Partial<InterviewFeedback>) =>
       api.post<{ success: boolean; data: InterviewFeedback }>(`/api/hrm/interviews/${interviewId}/feedbacks`, body),
 
-    // ----- Performance -----
-    listAppraisalCycles:  () => api.get<ListResp<AppraisalCycle>>('/api/hrm/appraisal-cycles'),
-    createAppraisalCycle: (body: Partial<AppraisalCycle>) =>
-      api.post<{ success: boolean; data: AppraisalCycle }>('/api/hrm/appraisal-cycles', body),
-    updateAppraisalCycle: (id: string, body: Partial<AppraisalCycle>) =>
-      api.put<{ success: boolean; data: AppraisalCycle }>(`/api/hrm/appraisal-cycles/${id}`, body),
-    deleteAppraisalCycle: (id: string) => api.del<{ success: boolean }>(`/api/hrm/appraisal-cycles/${id}`),
-
-    listAppraisals: (params: { cycle_id?: string; employee_id?: string; status?: string; per_page?: number; page?: number } = {}) =>
-      api.get<PaginatedResp<Appraisal>>('/api/hrm/appraisals' + qs(params)),
-    createAppraisal: (body: Partial<Appraisal> & Record<string, unknown>) =>
-      api.post<{ success: boolean; data: Appraisal }>('/api/hrm/appraisals', body),
-    submitAppraisal: (id: string, responses?: Record<string, unknown>) =>
-      api.post<{ success: boolean; data: Appraisal }>(`/api/hrm/appraisals/${id}/submit`, { responses }),
-    reviewAppraisal: (id: string, body: { manager_comments?: string; overall_score?: number }) =>
-      api.post<{ success: boolean; data: Appraisal }>(`/api/hrm/appraisals/${id}/review`, body),
-    closeAppraisal: (id: string) =>
-      api.post<{ success: boolean; data: Appraisal }>(`/api/hrm/appraisals/${id}/close`),
-
-    // ----- Suggestions -----
-    listSuggestions: (params: { status?: string; category?: string; per_page?: number; page?: number } = {}) =>
-      api.get<PaginatedResp<Suggestion>>('/api/hrm/suggestions' + qs(params)),
-    submitSuggestion: (body: { title: string; body: string; category?: string; is_anonymous?: boolean }) =>
-      api.post<{ success: boolean; data: Suggestion }>('/api/hrm/suggestions', body),
-    transitionSuggestion: (id: string, body: { action: 'acknowledge' | 'action' | 'dismiss'; response?: string }) =>
-      api.post<{ success: boolean; data: Suggestion }>(`/api/hrm/suggestions/${id}/transition`, body),
-    deleteSuggestion: (id: string) => api.del<{ success: boolean }>(`/api/hrm/suggestions/${id}`),
-
     // ----- Notes & Documents -----
     listEmployeeNotes: (params: { employee_id?: string; category?: string; per_page?: number; page?: number } = {}) =>
       api.get<PaginatedResp<EmployeeNote>>('/api/hrm/employee-notes' + qs(params)),
@@ -200,6 +191,8 @@ export function useHrmApi() {
       api.put<{ success: boolean; data: Attendance }>(`/api/hrm/attendances/${id}`, body),
     deleteAttendance: (id: string) => api.del<{ success: boolean }>(`/api/hrm/attendances/${id}`),
     checkIn: (body?: { notes?: string }) => api.post<{ success: boolean; data: Attendance }>('/api/hrm/attendance/check-in', body),
+    breakOut: (body?: { notes?: string }) => api.post<{ success: boolean; data: Attendance }>('/api/hrm/attendance/break-out', body),
+    breakIn: (body?: { notes?: string }) => api.post<{ success: boolean; data: Attendance }>('/api/hrm/attendance/break-in', body),
     checkOut: (body?: { notes?: string }) => api.post<{ success: boolean; data: Attendance }>('/api/hrm/attendance/check-out', body),
     getAttendanceStats: (params: { employee_id: string; start_date: string; end_date: string }) =>
       api.get<{ data: AttendanceStats }>('/api/hrm/attendance/stats' + qs(params)),

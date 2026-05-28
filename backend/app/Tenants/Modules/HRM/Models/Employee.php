@@ -79,6 +79,16 @@ class Employee extends Model
         return $this->hasMany(LeaveBalance::class);
     }
 
+    /**
+     * Career journal: every promotion/transfer/salary adjustment. Ordered
+     * by effective_date desc on the controller side so the timeline reads
+     * top-down newest-first.
+     */
+    public function promotions(): HasMany
+    {
+        return $this->hasMany(EmployeePromotion::class);
+    }
+
     public function payslips(): HasMany
     {
         return $this->hasMany(Payslip::class);

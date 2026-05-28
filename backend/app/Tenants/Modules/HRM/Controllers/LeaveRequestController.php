@@ -21,9 +21,25 @@ class LeaveRequestController extends Controller
             ->with(['employee:id,first_name,last_name,employee_id', 'leaveType:id,name,code'])
             ->orderByDesc('created_at');
 
-        foreach (['employee_id', 'leave_type_id', 'status'] as $f) {
-            if ($request->filled($f)) {
-                $query->where($f, $request->string($f));
+        // Auto-scope: a regular employee (no hrm.employee.read perm) only
+        // ever sees their own requests, regardless of what employee_id
+        // they pass in the query string. Admins/HR keep the existing
+        // query-string filter unchanged.
+        $scope = $this->selfScopedEmployeeId($request);
+        if ($scope !== false) {
+            $query->where('employee_id', $scope);
+        } else {
+            foreach (['employee_id', 'leave_type_id', 'status'] as $f) {
+                if ($request->filled($f)) {
+                    $query->where($f, $request->string($f));
+                }
+            }
+        }
+        // leave_type_id + status filters still apply for self-scoped
+        // users so the staff dashboard can filter their own history.
+        if ($scope !== false) {
+            foreach (['leave_type_id', 'status'] as $f) {
+                if ($request->filled($f)) $query->where($f, $request->string($f));
             }
         }
         if ($request->filled('from')) $query->where('start_date', '>=', $request->string('from'));
@@ -32,8 +48,14 @@ class LeaveRequestController extends Controller
         return response()->json(['data' => $query->paginate($request->integer('per_page', 25))]);
     }
 
-    public function show(LeaveRequest $leave_request)
+    public function show(Request $request, LeaveRequest $leave_request)
     {
+        // Block staff from peeking at someone else's leave by guessing the
+        // request UUID — auto-scope check matches the index() pattern.
+        $scope = $this->selfScopedEmployeeId($request);
+        if ($scope !== false && $leave_request->employee_id !== $scope) {
+            return response()->json(['success' => false, 'message' => 'Forbidden.'], 403);
+        }
         return response()->json(['data' => $leave_request->load([
             'employee', 'leaveType',
             'approver:id,first_name,last_name',
@@ -100,8 +122,13 @@ class LeaveRequestController extends Controller
         return response()->json(['success' => true, 'data' => $updated]);
     }
 
-    public function balances(string $employeeId)
+    public function balances(Request $request, string $employeeId)
     {
+        // Self-scoped users can only fetch their own balances.
+        $scope = $this->selfScopedEmployeeId($request);
+        if ($scope !== false && $employeeId !== $scope) {
+            return response()->json(['success' => false, 'message' => 'Forbidden.'], 403);
+        }
         $balances = LeaveBalance::with('leaveType:id,name,code,color')
             ->where('employee_id', $employeeId)
             ->orderByDesc('year')
@@ -118,5 +145,34 @@ class LeaveRequestController extends Controller
         $userId = $request->user()?->id;
         if (! $userId) return null;
         return Employee::where('user_id', $userId)->first();
+    }
+
+    /**
+     * Return the employee_id we should scope queries to, or `false` when
+     * the caller is an admin/HR user (`hrm.employee.read`) and should see
+     * all rows. A `null` return means "self-scoped, but no linked employee"
+     * — which we treat as scoping to a sentinel UUID that can't match
+     * anything, so the user sees an empty list rather than everyone's data.
+     *
+     * Why `false` for the unscoped case: distinguishes "no scope needed"
+     * from "scope to nothing", which `null` would conflate.
+     *
+     * @return string|false
+     */
+    private function selfScopedEmployeeId(Request $request)
+    {
+        $user = $request->user();
+        if (! $user) return '00000000-0000-0000-0000-000000000000';
+
+        // Admins / HR with employee.read see everything.
+        $user->loadMissing('role.permissions:id,name');
+        if ($user->role?->name === 'super-admin') return false;
+        $perms = $user->role
+            ? $user->role->effectivePermissions()->pluck('name')->all()
+            : [];
+        if (in_array('hrm.employee.read', $perms, true)) return false;
+
+        $emp = Employee::where('user_id', $user->id)->first(['id']);
+        return $emp?->id ?? '00000000-0000-0000-0000-000000000000';
     }
 }

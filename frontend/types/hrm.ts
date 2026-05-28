@@ -9,7 +9,18 @@ export interface Department {
   parent_id?: string | null
   parent?: Pick<Department, 'id' | 'name'> | null
   manager_id?: string | null
-  manager?: { id: string; first_name: string; last_name: string } | null
+  // The /api/hrm/me endpoint eager-loads richer manager fields (email,
+  // phone, employee_id) for the Profile screen — older consumers that
+  // only use first/last still type-check because everything beyond
+  // first/last is optional.
+  manager?: {
+    id: string
+    first_name: string
+    last_name: string
+    employee_id?: string | null
+    email?: string | null
+    phone?: string | null
+  } | null
   description?: string | null
   is_active: boolean
   created_at: string
@@ -69,6 +80,34 @@ export interface EmployeeEducationRow {
   major_subject?: string | null
   status?: string | null
   university_school?: string | null
+}
+
+export type PromotionType = 'promotion' | 'lateral' | 'demotion' | 'salary_adjustment'
+
+export interface EmployeePromotion {
+  id: string
+  employee_id: string
+  effective_date: string
+  type: PromotionType
+  previous_position_id?: string | null
+  new_position_id?: string | null
+  previous_department_id?: string | null
+  new_department_id?: string | null
+  previous_role_name?: string | null
+  new_role_name?: string | null
+  previous_salary?: string | number | null
+  new_salary?: string | number | null
+  currency?: string | null
+  reason?: string | null
+  approved_by?: string | null
+  // Eager-loaded relations from the controller / me endpoint.
+  previous_position?: Pick<Position, 'id' | 'title'> | null
+  new_position?: Pick<Position, 'id' | 'title'> | null
+  previous_department?: Pick<Department, 'id' | 'name'> | null
+  new_department?: Pick<Department, 'id' | 'name'> | null
+  approver?: { id: string; first_name: string; last_name: string; employee_id?: string | null } | null
+  created_at?: string
+  updated_at?: string
 }
 
 export interface EmployeeContract {
@@ -141,6 +180,8 @@ export interface Employee {
   educations?: EmployeeEducationRow[] | null
   active_contract?: EmployeeContract | null
   contracts?: EmployeeContract[] | null
+  // Career journal — newest-first. Eager-loaded by both show() and me().
+  promotions?: EmployeePromotion[] | null
   created_at: string
   updated_at: string
   deleted_at?: string | null
@@ -269,6 +310,10 @@ export interface Application {
   converted_at?: string | null
   vacancy?: Pick<Vacancy, 'id' | 'title' | 'reference'>
   employee?: Pick<Employee, 'id' | 'first_name' | 'last_name' | 'employee_id'>
+  // Eloquent timestamps — used by the kanban for "X minutes ago" and
+  // the NEW badge.
+  created_at?: string
+  updated_at?: string
 }
 
 export interface Interview {
@@ -292,46 +337,6 @@ export interface InterviewFeedback {
   strengths?: string | null
   weaknesses?: string | null
   notes?: string | null
-}
-
-export interface AppraisalCycle {
-  id: string
-  name: string
-  start_date: string
-  end_date: string
-  rating_scale?: Array<{ value: number; label: string }> | null
-  is_active: boolean
-}
-
-export interface Appraisal {
-  id: string
-  cycle_id: string
-  employee_id: string
-  reviewer_id?: string | null
-  status: string
-  overall_score?: string | number | null
-  manager_comments?: string | null
-  employee_comments?: string | null
-  responses?: Record<string, unknown> | null
-  submitted_at?: string | null
-  closed_at?: string | null
-  cycle?: Pick<AppraisalCycle, 'id' | 'name'>
-  employee?: Pick<Employee, 'id' | 'first_name' | 'last_name'>
-  reviewer?: { id: string; first_name: string; last_name: string } | null
-}
-
-export interface Suggestion {
-  id: string
-  employee_id?: string | null
-  category: string
-  title: string
-  body: string
-  is_anonymous: boolean
-  status: string
-  reviewed_by?: string | null
-  reviewed_at?: string | null
-  response?: string | null
-  created_at: string
 }
 
 export interface EmployeeNote {
@@ -364,13 +369,24 @@ export interface EmployeeDocument {
 export type PaginatedResp<T> = { data: Paginated<T> }
 export type ListResp<T> = { data: T[] }
 
+export type AttendanceStatus = 'present' | 'late' | 'absent' | 'half_day' | 'on_leave'
+
 export interface Attendance {
   id: string
   employee_id: string
   date: string
+  // 4-punch day: check_in → break_out → break_in → check_out.
+  // Any can be null until the user reaches that step (or never does).
   check_in: string | null
+  break_out: string | null
+  break_in: string | null
   check_out: string | null
-  status: 'present' | 'late' | 'absent' | 'half_day' | 'on_leave'
+  // Legacy overall status — kept for queries that don't yet split halves.
+  status: AttendanceStatus
+  // Per-half status. Populated by the service when the user punches
+  // in / breaks in. The auto-absent cron fills these in for missed days.
+  morning_status: AttendanceStatus | null
+  afternoon_status: AttendanceStatus | null
   notes: string | null
   created_at: string
   updated_at: string

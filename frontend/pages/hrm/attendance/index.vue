@@ -12,6 +12,14 @@ const hrm = useHrmApi()
 const toast = useToast()
 const confirm = useConfirm()
 const { t } = useI18n()
+const { has } = usePermissions()
+
+// HR-admin proxy. Staff users (no hrm.employee.read) get the directory
+// as a read-only view of their OWN attendance — no employee filter
+// (only their own rows are returned by the backend), no manual-entry
+// button, no edit/delete row actions. Admins keep the full UI.
+const isHrAdmin = computed(() => has('hrm.employee.read'))
+const canDeleteAttendance = computed(() => has('hrm.attendance.delete'))
 
 // Date helpers
 const datePreprocess = (val: unknown): string | null => {
@@ -101,16 +109,28 @@ const todayStatus = computed(() => {
   return 'checkedIn'
 })
 
-const todayCheckInTime = computed(() => {
-  if (!todayRecord.value?.check_in) return ''
-  const d = new Date(todayRecord.value.check_in)
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-})
+// Pretty HH:MM:SS for one punch. Empty when the punch hasn't happened.
+const formatPunch = (iso: string | null | undefined): string => {
+  if (!iso) return '--:--:--'
+  const d = new Date(iso)
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+}
+const todayCheckInTime  = computed(() => formatPunch(todayRecord.value?.check_in))
+const todayBreakOutTime = computed(() => formatPunch(todayRecord.value?.break_out))
+const todayBreakInTime  = computed(() => formatPunch(todayRecord.value?.break_in))
+const todayCheckOutTime = computed(() => formatPunch(todayRecord.value?.check_out))
 
-const todayCheckOutTime = computed(() => {
-  if (!todayRecord.value?.check_out) return ''
-  const d = new Date(todayRecord.value.check_out)
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+// 4-punch state machine: the next valid action depends on which fields
+// are already populated. `done` means all four punches are recorded —
+// the action card disappears.
+type NextAction = 'checkIn' | 'breakOut' | 'breakIn' | 'checkOut' | 'done'
+const nextAction = computed<NextAction>(() => {
+  const r = todayRecord.value
+  if (!r || !r.check_in) return 'checkIn'
+  if (!r.break_out) return 'breakOut'
+  if (!r.break_in)  return 'breakIn'
+  if (!r.check_out) return 'checkOut'
+  return 'done'
 })
 
 // Self-service clock actions
@@ -124,6 +144,7 @@ const onClockIn = async () => {
       clockNotes.value = ''
       await fetchTodayRecord()
       await fetchStats()
+      await fetchRecentAttendance()
       await refreshAdminLogs()
     }
   } catch (err: any) {
@@ -144,6 +165,7 @@ const onClockOut = async () => {
       clockNotes.value = ''
       await fetchTodayRecord()
       await fetchStats()
+      await fetchRecentAttendance()
       await refreshAdminLogs()
     }
   } catch (err: any) {
@@ -151,6 +173,69 @@ const onClockOut = async () => {
     toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: detailMsg, life: 5000 })
   } finally {
     essLoading.value = false
+  }
+}
+
+const onBreakOut = async () => {
+  if (!activeEmployee.value) return
+  essLoading.value = true
+  try {
+    const res = await hrm.breakOut({ notes: clockNotes.value || undefined })
+    if (res.success) {
+      toast.add({ severity: 'success', summary: t('hrm.attendance.toast.brokeOut'), life: 3000 })
+      clockNotes.value = ''
+      await fetchTodayRecord()
+    }
+  } catch (err: any) {
+    toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: err.data?.message || err.message, life: 5000 })
+  } finally { essLoading.value = false }
+}
+
+const onBreakIn = async () => {
+  if (!activeEmployee.value) return
+  essLoading.value = true
+  try {
+    const res = await hrm.breakIn({ notes: clockNotes.value || undefined })
+    if (res.success) {
+      toast.add({ severity: 'success', summary: t('hrm.attendance.toast.brokeIn'), life: 3000 })
+      clockNotes.value = ''
+      await fetchTodayRecord()
+    }
+  } catch (err: any) {
+    toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: err.data?.message || err.message, life: 5000 })
+  } finally { essLoading.value = false }
+}
+
+// Dispatcher used by the smart "next action" button.
+const onNextAction = () => {
+  switch (nextAction.value) {
+    case 'checkIn':  return onClockIn()
+    case 'breakOut': return onBreakOut()
+    case 'breakIn':  return onBreakIn()
+    case 'checkOut': return onClockOut()
+  }
+}
+
+// ── Recent attendance (last 6 days for the ESS panel) ──────────
+// Renders the table shown in the screenshot: Date | Morning | Afternoon
+// | Remarks. Backend auto-scopes for staff; admins see only their own
+// active employee (which is themselves when linked).
+const recentAttendance = ref<Attendance[]>([])
+const fetchRecentAttendance = async () => {
+  if (!activeEmployee.value) return
+  const end = new Date()
+  const start = new Date()
+  start.setDate(end.getDate() - 6)
+  try {
+    const res = await hrm.listAttendances({
+      employee_id: activeEmployee.value.id,
+      start_date: datePreprocess(start)!,
+      end_date: datePreprocess(end)!,
+      per_page: 14,
+    })
+    recentAttendance.value = res.data.data ?? []
+  } catch {
+    /* swallow — empty state will render */
   }
 }
 
@@ -163,6 +248,7 @@ onMounted(() => {
   if (activeEmployee.value) {
     fetchTodayRecord()
     fetchStats()
+    fetchRecentAttendance()
   }
 })
 
@@ -175,6 +261,7 @@ watch(activeEmployee, (newVal) => {
   if (newVal) {
     fetchTodayRecord()
     fetchStats()
+    fetchRecentAttendance()
   }
 })
 
@@ -336,115 +423,175 @@ const onDelete = (row: Attendance) => {
       </div>
     </div>
 
-    <!-- ESS Check In/Out & Stats Widget -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      
-      <!-- Live Clock & Clock In/Out Widget -->
-      <Card class="relative overflow-hidden border border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-900 shadow-md">
+    <!-- ESS error state (no linked employee) -->
+    <div v-if="!activeEmployee" class="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl space-y-2">
+      <div class="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-semibold text-sm">
+        <i class="pi pi-exclamation-triangle" />
+        <span>{{ t('hrm.attendance.noEmployee') }}</span>
+      </div>
+      <p class="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+        {{ t('hrm.attendance.noEmployeeDetail') }}
+      </p>
+    </div>
+
+    <template v-else>
+      <!-- 4-punch tiles: Check In · Break Out · Break In · Check Out -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card>
+          <template #content>
+            <div class="flex items-center gap-3">
+              <div class="size-12 rounded-full bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 grid place-items-center">
+                <i class="pi pi-sign-in" />
+              </div>
+              <div>
+                <div class="text-xl font-mono font-bold tracking-tight">{{ todayCheckInTime }}</div>
+                <div class="text-xs text-surface-500">{{ t('hrm.attendance.tiles.checkIn') }}</div>
+              </div>
+            </div>
+          </template>
+        </Card>
+        <Card>
+          <template #content>
+            <div class="flex items-center gap-3">
+              <div class="size-12 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 grid place-items-center">
+                <i class="pi pi-arrow-up-right" />
+              </div>
+              <div>
+                <div class="text-xl font-mono font-bold tracking-tight">{{ todayBreakOutTime }}</div>
+                <div class="text-xs text-surface-500">{{ t('hrm.attendance.tiles.breakOut') }}</div>
+              </div>
+            </div>
+          </template>
+        </Card>
+        <Card>
+          <template #content>
+            <div class="flex items-center gap-3">
+              <div class="size-12 rounded-full bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 grid place-items-center">
+                <i class="pi pi-arrow-down-left" />
+              </div>
+              <div>
+                <div class="text-xl font-mono font-bold tracking-tight">{{ todayBreakInTime }}</div>
+                <div class="text-xs text-surface-500">{{ t('hrm.attendance.tiles.breakIn') }}</div>
+              </div>
+            </div>
+          </template>
+        </Card>
+        <Card>
+          <template #content>
+            <div class="flex items-center gap-3">
+              <div class="size-12 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 grid place-items-center">
+                <i class="pi pi-sign-out" />
+              </div>
+              <div>
+                <div class="text-xl font-mono font-bold tracking-tight">{{ todayCheckOutTime }}</div>
+                <div class="text-xs text-surface-500">{{ t('hrm.attendance.tiles.checkOut') }}</div>
+              </div>
+            </div>
+          </template>
+        </Card>
+      </div>
+
+      <!-- Smart action button: morphs to match the next valid punch -->
+      <Card v-if="nextAction !== 'done'">
         <template #content>
-          <div class="flex flex-col items-center py-4 space-y-6 text-center">
-            
-            <!-- Live Ticker -->
-            <div>
-              <div class="text-xs uppercase tracking-widest font-semibold text-surface-400 dark:text-surface-500 mb-1">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div class="flex-1">
+              <div class="text-xs uppercase tracking-wider text-surface-400 mb-1">
                 {{ t('hrm.attendance.liveTime') }}
               </div>
-              <div class="text-4xl font-mono font-bold tracking-tight text-primary-600 dark:text-primary-400 drop-shadow-sm select-none">
-                {{ currentTime || '00:00:00' }}
-              </div>
-              <div class="text-xs font-medium text-surface-500 mt-1">
+              <div class="font-mono text-2xl font-bold text-primary-600 dark:text-primary-400">{{ currentTime || '00:00:00' }}</div>
+              <div class="text-xs text-surface-500 mt-0.5">
                 {{ new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) }}
               </div>
             </div>
-
-            <Divider class="!my-2" />
-
-            <!-- ESS Error state (User not linked to Employee) -->
-            <div v-if="!activeEmployee" class="px-2">
-              <div class="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl text-left space-y-2">
-                <div class="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-semibold text-sm">
-                  <i class="pi pi-exclamation-triangle" />
-                  <span>{{ t('hrm.attendance.noEmployee') }}</span>
-                </div>
-                <p class="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
-                  {{ t('hrm.attendance.noEmployeeDetail') }}
-                </p>
-              </div>
+            <div class="flex-1 max-w-md">
+              <Textarea
+                v-model="clockNotes"
+                rows="1"
+                class="w-full text-sm"
+                :placeholder="t('hrm.attendance.notesPlaceholder')"
+                :disabled="essLoading"
+              />
             </div>
-
-            <!-- ESS Active Clock Status & Input Form -->
-            <div v-else class="w-full space-y-4">
-              
-              <!-- Status Tag -->
-              <div class="space-y-1">
-                <div class="text-xs font-semibold text-surface-400 dark:text-surface-500 uppercase tracking-wide">
-                  {{ t('hrm.attendance.status.label') }}
-                </div>
-                
-                <Tag v-if="todayStatus === 'notCheckedIn'" severity="warn" size="large" class="!px-4 !py-2 !rounded-xl !text-sm">
-                  <i class="pi pi-sign-in mr-2" />
-                  <span>{{ t('hrm.attendance.status.notCheckedIn') }}</span>
-                </Tag>
-                
-                <Tag v-else-if="todayStatus === 'checkedIn'" severity="success" size="large" class="!px-4 !py-2 !rounded-xl !text-sm animate-pulse">
-                  <i class="pi pi-spin pi-spinner mr-2" />
-                  <span>{{ t('hrm.attendance.status.checkedIn', { time: todayCheckInTime }) }}</span>
-                </Tag>
-                
-                <Tag v-else-if="todayStatus === 'checkedOut'" severity="info" size="large" class="!px-4 !py-2 !rounded-xl !text-sm">
-                  <i class="pi pi-check-circle mr-2" />
-                  <span>{{ t('hrm.attendance.status.checkedOut', { time: todayCheckOutTime }) }}</span>
-                </Tag>
-              </div>
-
-              <!-- Notes Area -->
-              <div v-if="todayStatus !== 'checkedOut'" class="text-left">
-                <Textarea 
-                  v-model="clockNotes"
-                  rows="2"
-                  class="w-full text-sm !bg-surface-50 dark:!bg-surface-950" 
-                  :placeholder="t('hrm.attendance.notesPlaceholder')" 
-                  :disabled="essLoading"
-                />
-              </div>
-
-              <!-- Action buttons -->
-              <div class="flex gap-3 justify-center">
-                <!-- Clock In Button -->
-                <Button 
-                  v-if="todayStatus === 'notCheckedIn'"
-                  :label="t('hrm.attendance.clockIn')"
-                  icon="pi pi-sign-in" 
-                  severity="success"
-                  class="w-full !rounded-xl !py-3 font-semibold hover:shadow-lg transition-shadow"
-                  :loading="essLoading"
-                  @click="onClockIn"
-                />
-                
-                <!-- Clock Out Button -->
-                <Button 
-                  v-if="todayStatus === 'checkedIn'"
-                  :label="t('hrm.attendance.clockOut')"
-                  icon="pi pi-sign-out" 
-                  severity="info"
-                  class="w-full !rounded-xl !py-3 font-semibold hover:shadow-lg transition-shadow"
-                  :loading="essLoading"
-                  @click="onClockOut"
-                />
-
-                <div v-if="todayStatus === 'checkedOut'" class="text-xs text-surface-400 py-2">
-                  <i class="pi pi-lock mr-1 text-[10px]" />
-                  Today's self-service logs are locked.
-                </div>
-              </div>
-            </div>
-
+            <Button
+              :label="t(`hrm.attendance.action.${nextAction}`)"
+              :icon="nextAction === 'checkIn'  ? 'pi pi-sign-in'
+                   : nextAction === 'breakOut' ? 'pi pi-arrow-up-right'
+                   : nextAction === 'breakIn'  ? 'pi pi-arrow-down-left'
+                   :                             'pi pi-sign-out'"
+              :severity="nextAction === 'checkIn'  ? 'success'
+                      : nextAction === 'breakOut' ? 'warn'
+                      : nextAction === 'breakIn'  ? 'info'
+                      :                             'danger'"
+              class="font-semibold"
+              :loading="essLoading"
+              @click="onNextAction"
+            />
+          </div>
+        </template>
+      </Card>
+      <Card v-else>
+        <template #content>
+          <div class="text-center text-sm text-surface-500 py-2">
+            <i class="pi pi-check-circle text-emerald-500 mr-2" />
+            {{ t('hrm.attendance.dayComplete') }}
           </div>
         </template>
       </Card>
 
+      <!-- Recent Attendance Last 6 days (morning + afternoon per row) -->
+      <Card>
+        <template #content>
+          <h2 class="text-base font-semibold mb-3">{{ t('hrm.attendance.recent.title') }}</h2>
+          <DataTable :value="recentAttendance" data-key="id" class="text-sm">
+            <template #empty>
+              <div class="py-6 text-center text-surface-400 text-xs">{{ t('hrm.attendance.recent.empty') }}</div>
+            </template>
+            <Column :header="t('hrm.attendance.recent.columns.date')">
+              <template #body="{ data }">
+                <span class="inline-flex items-center gap-1 font-mono text-xs">
+                  <i class="pi pi-calendar text-[10px] text-surface-400" />
+                  {{ formatDate(data.date) }}, {{ new Date(data.date).toLocaleDateString(undefined, { weekday: 'long' }) }}
+                </span>
+              </template>
+            </Column>
+            <Column :header="t('hrm.attendance.recent.columns.morning')">
+              <template #body="{ data }">
+                <Tag
+                  v-if="data.morning_status"
+                  :value="t(`hrm.attendance.statusValues.${data.morning_status}`)"
+                  :severity="getStatusSeverity(data.morning_status)"
+                  class="!text-[10px] !py-0"
+                />
+                <span v-else class="text-surface-400 text-xs">—</span>
+              </template>
+            </Column>
+            <Column :header="t('hrm.attendance.recent.columns.afternoon')">
+              <template #body="{ data }">
+                <Tag
+                  v-if="data.afternoon_status"
+                  :value="t(`hrm.attendance.statusValues.${data.afternoon_status}`)"
+                  :severity="getStatusSeverity(data.afternoon_status)"
+                  class="!text-[10px] !py-0"
+                />
+                <span v-else class="text-surface-400 text-xs">—</span>
+              </template>
+            </Column>
+            <Column :header="t('hrm.attendance.recent.columns.remarks')">
+              <template #body="{ data }">
+                <span class="text-xs text-surface-500">{{ data.notes || '—' }}</span>
+              </template>
+            </Column>
+          </DataTable>
+        </template>
+      </Card>
+    </template>
+
+    <!-- Monthly stats (admins keep their own employee's stats below the timeline) -->
+    <div v-if="activeEmployee">
+
       <!-- Personal Monthly Statistics Breakdown -->
-      <Card class="lg:col-span-2 border border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-900 shadow-md">
+      <Card class="border border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-900 shadow-md">
         <template #title>
           <div class="flex items-center gap-2">
             <i class="pi pi-chart-bar text-primary-500" />
@@ -510,9 +657,10 @@ const onDelete = (row: Attendance) => {
             <i class="pi pi-list text-primary-500" />
             <span>{{ t('hrm.attendance.directory.title') }}</span>
           </div>
-          <Button 
+          <Button
+            v-if="isHrAdmin"
             :label="t('hrm.attendance.directory.new')"
-            icon="pi pi-plus" 
+            icon="pi pi-plus"
             size="small"
             class="hover:shadow-md transition-shadow font-semibold"
             @click="openCreate"
@@ -526,14 +674,17 @@ const onDelete = (row: Attendance) => {
           
           <!-- Filters Row -->
           <div class="flex flex-wrap items-center gap-3 bg-surface-50 dark:bg-surface-950 p-3 rounded-2xl border border-surface-200 dark:border-surface-800">
-            <!-- Filter Employee -->
-            <Select 
-              v-model="empFilter" 
-              :options="employeesList" 
+            <!-- Filter Employee — HR admins only. Staff are auto-scoped
+                 to themselves on the backend, so the filter would be a
+                 single-option no-op for them. -->
+            <Select
+              v-if="isHrAdmin"
+              v-model="empFilter"
+              :options="employeesList"
               option-value="id"
-              show-clear 
+              show-clear
               filter
-              class="w-56 text-sm" 
+              class="w-56 text-sm"
               :placeholder="t('hrm.attendance.dialog.fields.employee')"
             >
               <template #option="{ option }">
@@ -637,24 +788,34 @@ const onDelete = (row: Attendance) => {
               </template>
             </Column>
 
-            <!-- Actions block -->
-            <Column header="" body-class="text-right !py-2" :style="{ width: '120px' }">
+            <!-- Actions block — manual edits & deletes are HR-admin
+                 territory; staff stick to clock-in / clock-out. The
+                 column collapses to zero width when both gates fail
+                 so the layout doesn't leave an empty 120px slot. -->
+            <Column
+              v-if="isHrAdmin || canDeleteAttendance"
+              header=""
+              body-class="text-right !py-2"
+              :style="{ width: '120px' }"
+            >
               <template #body="{ data }">
-                <Button 
-                  icon="pi pi-pencil" 
-                  text 
-                  rounded 
-                  severity="secondary" 
+                <Button
+                  v-if="isHrAdmin"
+                  icon="pi pi-pencil"
+                  text
+                  rounded
+                  severity="secondary"
                   class="hover:!bg-surface-100 dark:hover:!bg-surface-800"
-                  @click="openEdit(data)" 
+                  @click="openEdit(data)"
                 />
-                <Button 
-                  icon="pi pi-trash" 
-                  text 
-                  rounded 
-                  severity="danger" 
+                <Button
+                  v-if="canDeleteAttendance"
+                  icon="pi pi-trash"
+                  text
+                  rounded
+                  severity="danger"
                   class="hover:!bg-rose-50 dark:hover:!bg-rose-950/20"
-                  @click="onDelete(data)" 
+                  @click="onDelete(data)"
                 />
               </template>
             </Column>

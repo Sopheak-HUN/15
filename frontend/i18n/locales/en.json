@@ -57,8 +57,6 @@
     "attendance": "Attendance",
     "payroll": "Payroll",
     "recruitment": "Recruitment",
-    "performance": "Performance",
-    "suggestions": "Suggestions",
     "groups": {
       "iam": "Identity & Access",
       "hrm": "Human Resources"
@@ -68,9 +66,47 @@
   },
   "user": {
     "menu": "User menu",
+    "profile": "My profile",
     "mfa": "Two-Factor Auth",
     "signOut": "Sign out",
     "signedOut": "Signed out"
+  },
+  "profile": {
+    "editProfile": "Edit profile",
+    "tiles": {
+      "leaveUsed": "Leave used",
+      "leaveAvailable": "Leave available",
+      "attendance": "Attendance",
+      "todayStatus": "Today",
+      "daysThisYear": "Days this year",
+      "daysRemaining": "Days remaining",
+      "presentThisMonth": "Days present this month",
+      "notClockedIn": "Not clocked in",
+      "days": "days"
+    },
+    "sections": {
+      "personal": "Personal info",
+      "department": "Department",
+      "manager": "Department manager",
+      "leaveBalances": "Leave balances",
+      "recentLeave": "Recent leave requests",
+      "recentAttendance": "Recent attendance",
+      "requestLeave": "Request leave",
+      "career": "My career history"
+    },
+    "balances": {
+      "used": "Used",
+      "pending": "Pending"
+    },
+    "empty": {
+      "balances": "No leave balances yet — HR can seed your entitlements.",
+      "requests": "You haven't submitted any leave requests.",
+      "attendance": "No attendance records in the current month."
+    },
+    "unlinked": {
+      "title": "Your account isn't linked to an employee yet",
+      "subtitle": "Ask HR to provision your employee profile so you can use leave, attendance, and payroll features."
+    }
   },
   "errors": {
     "forbidden": {
@@ -277,6 +313,44 @@
     "newValues": "New values"
   },
   "hrm": {
+    "career": {
+      "tab": "Career",
+      "title": "Career history",
+      "subtitle": "Timeline of promotions, transfers and salary adjustments.",
+      "record": "Record promotion",
+      "dialogTitle": "Record career change",
+      "empty": "No career events recorded yet. Hit \"Record promotion\" to add the first entry.",
+      "approvedBy": "Approved by",
+      "applyNow": "Apply to current profile",
+      "applyNowHint": "Also updates the employee's live position, department, role title, and salary. Turn off to backfill historical events.",
+      "confirmDelete": "Delete the career entry dated {date}? The journal record is removed; the current employee row is not reverted.",
+      "types": {
+        "promotion": "Promotion",
+        "lateral": "Transfer",
+        "demotion": "Demotion",
+        "salary_adjustment": "Salary adjustment"
+      },
+      "fields": {
+        "type": "Type",
+        "effectiveDate": "Effective date",
+        "newPosition": "New position",
+        "newDepartment": "New department",
+        "newRoleName": "New role / title",
+        "newSalary": "New salary",
+        "reason": "Reason / notes"
+      },
+      "placeholders": {
+        "position": "Pick a position (optional)",
+        "department": "Pick a department (optional)",
+        "roleName": "e.g. Senior Software Engineer",
+        "salary": "Monthly base salary",
+        "reason": "Context for the change…"
+      },
+      "toast": {
+        "recorded": "Career entry recorded",
+        "deleted": "Career entry deleted"
+      }
+    },
     "common": {
       "code": "Code",
       "title": "Title",
@@ -885,7 +959,37 @@
         "revertConfirm": "Revert this conversion? Within 7 days of {convertedAt}, the linked employee is soft-deleted and the employee_id is released. Use the standard offboarding flow after that window.",
         "bulkConvertHeader": "Bulk convert",
         "bulkConvertBody": "{count} hired-and-unlinked applications selected. Converted rows link to the new employee; rows that fail are listed below.",
-        "bulkResult": "{converted} converted · {linked} already linked · {ineligible} not hired · {missing} missing · {errors} errors"
+        "bulkConvertEmpty": "No hired-and-unlinked candidates to convert in the current filter.",
+        "bulkResult": "{converted} converted · {linked} already linked · {ineligible} not hired · {missing} missing · {errors} errors",
+        "searchPlaceholder": "Search by name or email…",
+        "pipeline": {
+          "title": "Candidate Pipeline",
+          "subtitle": "Drag a card across columns to advance an applicant.",
+          "allVacancies": "All vacancies",
+          "viewBoard": "Board",
+          "viewList": "List",
+          "postJob": "Post New Job",
+          "newBadge": "NEW",
+          "dropHereTo": "Drop here to move to {status}"
+        },
+        "timeAgo": {
+          "justNow": "just now",
+          "mAgo": "{n}m ago",
+          "hAgo": "{n}h ago",
+          "dAgo": "{n}d ago"
+        },
+        "kanban": {
+          "dropHere": "Drop a candidate here",
+          "statuses": {
+            "applied": "Applied",
+            "screening": "Screening",
+            "interview": "Technical Interview",
+            "offer": "Offer Sent",
+            "hired": "Hired",
+            "rejected": "Rejected",
+            "withdrawn": "Withdrawn"
+          }
+        }
       },
       "interviews": {
         "new": "Schedule interview",
@@ -932,116 +1036,6 @@
         "interviewScheduled": "Interview scheduled",
         "interviewUpdated": "Interview updated",
         "feedbackSubmitted": "Feedback submitted"
-      }
-    },
-    "performance": {
-      "title": "Performance",
-      "subtitle": "Appraisal cycles and per-employee reviews.",
-      "tabs": {
-        "cycles": "Cycles",
-        "appraisals": "Appraisals"
-      },
-      "placeholders": {
-        "cycleName": "e.g. FY2026 H1 Review",
-        "ratingScale": "JSON array — each item with a numeric value and a label",
-        "cycle": "Pick a cycle",
-        "employee": "Pick an employee",
-        "reviewer": "Pick a reviewer (optional)",
-        "employeeComments": "Self-assessment, highlights, learnings…",
-        "overallScore": "0-100",
-        "managerComments": "Strengths, growth areas, decisions…"
-      },
-      "cycles": {
-        "new": "New cycle",
-        "empty": "No appraisal cycles yet.",
-        "columns": {
-          "name": "Name",
-          "start": "Starts",
-          "end": "Ends",
-          "active": "Active"
-        },
-        "fields": {
-          "name": "Name",
-          "startDate": "Start date",
-          "endDate": "End date",
-          "isActive": "Active",
-          "ratingScale": "Rating scale (JSON array of value/label pairs)"
-        }
-      },
-      "appraisals": {
-        "new": "New appraisal",
-        "empty": "No appraisals in this cycle yet.",
-        "columns": {
-          "employee": "Employee",
-          "cycle": "Cycle",
-          "status": "Status",
-          "score": "Score"
-        },
-        "fields": {
-          "cycle": "Cycle",
-          "employee": "Employee",
-          "reviewer": "Reviewer",
-          "responses": "Responses (JSON)",
-          "employeeComments": "Self-assessment",
-          "managerComments": "Manager comments",
-          "overallScore": "Overall score"
-        },
-        "actions": {
-          "submit": "Submit",
-          "review": "Mark reviewed",
-          "close": "Close"
-        }
-      },
-      "toast": {
-        "cycleCreated": "Cycle created",
-        "cycleUpdated": "Cycle updated",
-        "cycleDeleted": "Cycle deleted",
-        "appraisalCreated": "Appraisal created",
-        "appraisalSubmitted": "Appraisal submitted",
-        "appraisalReviewed": "Appraisal reviewed",
-        "appraisalClosed": "Appraisal closed"
-      }
-    },
-    "suggestions": {
-      "title": "Suggestions",
-      "subtitle": "Employee suggestion box. Anonymous submissions strip submitter identity from the response.",
-      "new": "New suggestion",
-      "empty": "No suggestions match the filters.",
-      "anonymous": "Anonymous",
-      "placeholders": {
-        "title": "Short, descriptive title",
-        "category": "Pick a category",
-        "body": "Describe your idea or concern in detail…",
-        "response": "Reply to the submitter (optional)"
-      },
-      "columns": {
-        "title": "Title",
-        "category": "Category",
-        "status": "Status",
-        "submitted": "Submitted"
-      },
-      "form": {
-        "title": "Title",
-        "body": "Body",
-        "category": "Category",
-        "isAnonymous": "Submit anonymously"
-      },
-      "statuses": {
-        "new": "New",
-        "acknowledged": "Acknowledged",
-        "actioned": "Actioned",
-        "dismissed": "Dismissed"
-      },
-      "actions": {
-        "acknowledge": "Acknowledge",
-        "action": "Mark actioned",
-        "dismiss": "Dismiss",
-        "response": "Response"
-      },
-      "toast": {
-        "submitted": "Suggestion submitted",
-        "transitioned": "Suggestion updated",
-        "deleted": "Suggestion deleted"
       }
     },
     "notes": {
@@ -1188,11 +1182,43 @@
       },
       "toast": {
         "checkedIn": "Checked in successfully",
+        "brokeOut": "Break started",
+        "brokeIn": "Welcome back from break",
         "checkedOut": "Checked out successfully",
         "created": "Attendance log recorded",
         "updated": "Attendance log updated",
         "deleted": "Attendance log deleted"
       },
+      "tiles": {
+        "checkIn": "Today Check In",
+        "breakOut": "Today Break Out",
+        "breakIn": "Today Break In",
+        "checkOut": "Today Check Out"
+      },
+      "action": {
+        "checkIn": "Check In",
+        "breakOut": "Break Out",
+        "breakIn": "Break In",
+        "checkOut": "Check Out"
+      },
+      "statusValues": {
+        "present": "Present",
+        "late": "Late",
+        "absent": "Absent",
+        "half_day": "Half Day",
+        "on_leave": "On Leave"
+      },
+      "recent": {
+        "title": "Recent Attendance Last 6 days",
+        "empty": "No attendance recorded in the last 6 days.",
+        "columns": {
+          "date": "Date",
+          "morning": "Morning",
+          "afternoon": "Afternoon",
+          "remarks": "Remarks"
+        }
+      },
+      "dayComplete": "All four punches recorded — today is complete.",
       "noEmployee": "No Employee Profile",
       "noEmployeeDetail": "Your user account is not linked to an employee profile. ESS Clock In/Out is disabled, but you can manage logs for other employees if you have the permission."
     }

@@ -17,7 +17,14 @@ class AttendanceController extends Controller
     {
         $query = Attendance::query()->with('employee:id,first_name,last_name,employee_id');
 
-        if ($request->filled('employee_id')) {
+        // Auto-scope: regular employees (no hrm.employee.read) can only
+        // see their own attendance. The query string filter is honored
+        // for admins/HR; for everyone else it's overridden with the
+        // caller's own employee id so no one peeks at coworkers.
+        $scope = $this->selfScopedEmployeeId($request);
+        if ($scope !== false) {
+            $query->where('employee_id', $scope);
+        } elseif ($request->filled('employee_id')) {
             $query->where('employee_id', $request->string('employee_id'));
         }
 
@@ -38,8 +45,13 @@ class AttendanceController extends Controller
         return response()->json(['data' => $attendances]);
     }
 
-    public function show(Attendance $attendance)
+    public function show(Request $request, Attendance $attendance)
     {
+        // Block staff from peeking at someone else's record by id.
+        $scope = $this->selfScopedEmployeeId($request);
+        if ($scope !== false && $attendance->employee_id !== $scope) {
+            return response()->json(['success' => false, 'message' => 'Forbidden.'], 403);
+        }
         return response()->json(['data' => $attendance->load('employee')]);
     }
 
@@ -139,6 +151,34 @@ class AttendanceController extends Controller
         return response()->json(['success' => true, 'data' => $attendance]);
     }
 
+    public function breakOut(Request $request)
+    {
+        $employee = $this->resolveEmployee($request);
+        if (! $employee) {
+            return response()->json(['success' => false, 'message' => 'User is not associated with an employee record.'], 422);
+        }
+        try {
+            $attendance = $this->service->breakOut($employee, $request->input('notes'));
+        } catch (DomainException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+        return response()->json(['success' => true, 'data' => $attendance]);
+    }
+
+    public function breakIn(Request $request)
+    {
+        $employee = $this->resolveEmployee($request);
+        if (! $employee) {
+            return response()->json(['success' => false, 'message' => 'User is not associated with an employee record.'], 422);
+        }
+        try {
+            $attendance = $this->service->breakIn($employee, $request->input('notes'));
+        } catch (DomainException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+        return response()->json(['success' => true, 'data' => $attendance]);
+    }
+
     public function stats(Request $request)
     {
         $request->validate([
@@ -147,8 +187,17 @@ class AttendanceController extends Controller
             'end_date'    => 'required|date|after_or_equal:start_date',
         ]);
 
+        // Staff users can only request stats for themselves. If they
+        // pass someone else's id, return 403 rather than silently
+        // showing the wrong person's stats.
+        $scope = $this->selfScopedEmployeeId($request);
+        $requested = $request->string('employee_id');
+        if ($scope !== false && (string) $requested !== $scope) {
+            return response()->json(['success' => false, 'message' => 'Forbidden.'], 403);
+        }
+
         $stats = $this->service->getStats(
-            $request->string('employee_id'),
+            $requested,
             $request->string('start_date'),
             $request->string('end_date')
         );
@@ -160,5 +209,33 @@ class AttendanceController extends Controller
     {
         $userId = $request->user()?->id;
         return $userId ? Employee::where('user_id', $userId)->first() : null;
+    }
+
+    /**
+     * Return the employee_id queries should be locked to, or `false`
+     * when the caller is admin/HR (hrm.employee.read) and should see
+     * everyone. Mirrors LeaveRequestController::selfScopedEmployeeId so
+     * the two modules stay consistent — extract to a trait if a third
+     * module adopts the pattern.
+     *
+     * Returns a sentinel UUID for staff with no linked employee so
+     * queries match zero rows instead of accidentally returning all.
+     *
+     * @return string|false
+     */
+    private function selfScopedEmployeeId(Request $request)
+    {
+        $user = $request->user();
+        if (! $user) return '00000000-0000-0000-0000-000000000000';
+
+        $user->loadMissing('role.permissions:id,name');
+        if ($user->role?->name === 'super-admin') return false;
+        $perms = $user->role
+            ? $user->role->effectivePermissions()->pluck('name')->all()
+            : [];
+        if (in_array('hrm.employee.read', $perms, true)) return false;
+
+        $emp = Employee::where('user_id', $user->id)->first(['id']);
+        return $emp?->id ?? '00000000-0000-0000-0000-000000000000';
     }
 }

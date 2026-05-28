@@ -17,7 +17,7 @@ const toast = useToast()
 const confirm = useConfirm()
 const { t, locale } = useI18n()
 
-const tab = ref<'profile' | 'notes' | 'documents' | 'leave'>('profile')
+const tab = ref<'profile' | 'notes' | 'documents' | 'leave' | 'career'>('profile')
 
 // Pick the right name based on current locale (Khmer when available).
 const geoNameOf = (units: GeoUnit[], code?: string | null): string => {
@@ -366,6 +366,138 @@ const { data: balData } = await useAsyncData(
 )
 const balances = computed<LeaveBalance[]>(() => balData.value?.data ?? [])
 
+// ----- Career history (promotions / transfers / salary adjustments) -----
+// The employee show endpoint already eager-loads promotions, but we keep
+// a separate fetch + refresh function so adding a new record doesn't
+// require a full page reload.
+const promotions = computed(() => employee.value?.promotions ?? [])
+const refreshPromotions = async () => {
+  const fresh = await hrm.showEmployee(employeeId)
+  if (fresh?.data && empData.value) empData.value.data = fresh.data
+}
+
+const promoDialog = ref(false)
+const promoSaving = ref(false)
+const promoTypes = computed(() => (['promotion', 'lateral', 'demotion', 'salary_adjustment'] as const).map((v) => ({
+  label: t(`hrm.career.types.${v}`), value: v,
+})))
+
+const promoSchema = toTypedSchema(z.object({
+  effective_date: z.preprocess(datePreprocess, z.string().min(1, 'Effective date is required')),
+  type: z.enum(['promotion', 'lateral', 'demotion', 'salary_adjustment']),
+  new_position_id: z.string().uuid().nullable().optional().or(z.literal('')),
+  new_department_id: z.string().uuid().nullable().optional().or(z.literal('')),
+  new_role_name: z.string().max(120).optional().or(z.literal('')),
+  new_salary: z.coerce.number().min(0).nullable().optional(),
+  reason: z.string().max(2000).optional().or(z.literal('')),
+  apply_now: z.boolean(),
+}))
+const { defineField: pField, handleSubmit: handlePromo, errors: pErrors, resetForm: resetPromo } = useForm({
+  validationSchema: promoSchema,
+  initialValues: {
+    effective_date: new Date().toISOString().slice(0, 10),
+    type: 'promotion' as const,
+    new_position_id: '',
+    new_department_id: '',
+    new_role_name: '',
+    new_salary: null,
+    reason: '',
+    apply_now: true,
+  },
+})
+const [pEffectiveDate] = pField('effective_date')
+const [pType] = pField('type')
+const [pNewPositionId] = pField('new_position_id')
+const [pNewDepartmentId] = pField('new_department_id')
+const [pNewRoleName] = pField('new_role_name')
+const [pNewSalary] = pField('new_salary')
+const [pReason] = pField('reason')
+const [pApplyNow] = pField('apply_now')
+
+// Dropdown sources for the dialog — fetched lazily on first open.
+const promoPositions = ref<{ id: string; title: string }[]>([])
+const promoDepartments = ref<{ id: string; name: string }[]>([])
+const promoLookupsLoading = ref(false)
+
+const openPromoDialog = async () => {
+  resetPromo()
+  promoDialog.value = true
+  if (!promoPositions.value.length || !promoDepartments.value.length) {
+    promoLookupsLoading.value = true
+    try {
+      const [posResp, deptResp] = await Promise.all([
+        hrm.listPositions({ per_page: 200 }),
+        hrm.listDepartments({ per_page: 200 }),
+      ])
+      promoPositions.value = (posResp?.data?.data ?? []).map((p: { id: string; title: string }) => ({ id: p.id, title: p.title }))
+      promoDepartments.value = (deptResp?.data?.data ?? []).map((d: { id: string; name: string }) => ({ id: d.id, name: d.name }))
+    } catch {
+      /* swallow — selects will be empty and the user can still record a salary-only change */
+    } finally {
+      promoLookupsLoading.value = false
+    }
+  }
+}
+
+const onSavePromo = handlePromo(
+  async (values) => {
+    promoSaving.value = true
+    try {
+      await hrm.createEmployeePromotion(employeeId, {
+        effective_date: values.effective_date,
+        type: values.type,
+        new_position_id: values.new_position_id || null,
+        new_department_id: values.new_department_id || null,
+        new_role_name: values.new_role_name || null,
+        new_salary: values.new_salary ?? null,
+        reason: values.reason || null,
+        apply_now: values.apply_now,
+      })
+      toast.add({ severity: 'success', summary: t('hrm.career.toast.recorded'), life: 2500 })
+      promoDialog.value = false
+      await refreshPromotions()
+    } catch (err: unknown) {
+      const data = (err as { data?: { message?: string } }).data
+      toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: data?.message, life: 5000 })
+    } finally {
+      promoSaving.value = false
+    }
+  },
+  ({ errors }) => {
+    const firstError = Object.entries(errors)[0]
+    if (firstError) {
+      toast.add({ severity: 'warn', summary: 'Form Validation Error', detail: `${firstError[0]}: ${firstError[1]}`, life: 5000 })
+    }
+  },
+)
+
+const onDeletePromo = (row: { id: string; effective_date: string }) => {
+  confirm.require({
+    message: t('hrm.career.confirmDelete', { date: row.effective_date }),
+    header: t('hrm.common.confirmHeader'),
+    icon: 'pi pi-exclamation-triangle',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      await hrm.deleteEmployeePromotion(employeeId, row.id)
+      toast.add({ severity: 'success', summary: t('hrm.career.toast.deleted'), life: 2000 })
+      await refreshPromotions()
+    },
+  })
+}
+
+const promoTypeSeverity = (type: string) =>
+  type === 'promotion' ? 'success'
+    : type === 'demotion' ? 'danger'
+    : type === 'lateral' ? 'info'
+    : 'warn'
+
+const formatMoney = (v?: string | number | null) => {
+  if (v === null || v === undefined || v === '') return null
+  const n = Number(v)
+  if (Number.isNaN(n)) return String(v)
+  return `${n.toLocaleString()}`
+}
+
 // ----- Create user account -----
 // Provisions a tenant `users` row linked to this employee. Backend
 // rejects the call if `employee.user_id` is already set, so the button
@@ -549,6 +681,7 @@ const onSaveUser = handleUser(async (values) => {
       <Tabs v-model:value="tab">
         <TabList>
           <Tab value="profile">{{ t('hrm.employees.tabs.profile') }}</Tab>
+          <Tab value="career">{{ t('hrm.career.tab') }}</Tab>
           <Tab value="notes">{{ t('hrm.notes.tabs.notes') }}</Tab>
           <Tab value="documents">{{ t('hrm.notes.tabs.documents') }}</Tab>
           <Tab value="leave">{{ t('nav.leave') }}</Tab>
@@ -838,6 +971,100 @@ const onSaveUser = handleUser(async (values) => {
               </template>
             </Card>
           </TabPanel>
+
+          <!-- ─────────── Career ─────────── -->
+          <!-- Timeline of promotions / transfers / salary adjustments.
+               Read by anyone with hrm.employee.read; write gated server-
+               side by hrm.employee.write. We don't gate the button on the
+               frontend because the user already needed write to land on
+               this admin detail page. -->
+          <TabPanel value="career">
+            <Card>
+              <template #content>
+                <div class="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 class="text-sm font-semibold tracking-wider uppercase text-surface-400">{{ t('hrm.career.title') }}</h2>
+                    <p class="text-xs text-surface-500 mt-0.5">{{ t('hrm.career.subtitle') }}</p>
+                  </div>
+                  <Button :label="t('hrm.career.record')" icon="pi pi-plus" severity="success" @click="openPromoDialog" />
+                </div>
+
+                <!-- Empty state -->
+                <div v-if="!promotions.length" class="border-2 border-dashed border-surface-200 dark:border-surface-700 rounded-lg py-10 text-center text-sm text-surface-400">
+                  {{ t('hrm.career.empty') }}
+                </div>
+
+                <!-- Timeline: vertical rail with a node + card per entry -->
+                <ol v-else class="relative space-y-6">
+                  <div class="absolute left-3 top-3 bottom-3 w-px bg-surface-200 dark:bg-surface-700" />
+                  <li v-for="p in promotions" :key="p.id" class="relative pl-10">
+                    <!-- Node -->
+                    <div
+                      class="absolute left-0 top-1 size-6 rounded-full grid place-items-center text-[10px]"
+                      :class="{
+                        'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300': p.type === 'promotion',
+                        'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300':             p.type === 'lateral',
+                        'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300':         p.type === 'demotion',
+                        'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300':    p.type === 'salary_adjustment',
+                      }"
+                    >
+                      <i :class="{
+                        'pi pi-arrow-up':    p.type === 'promotion',
+                        'pi pi-arrow-right': p.type === 'lateral',
+                        'pi pi-arrow-down':  p.type === 'demotion',
+                        'pi pi-dollar':      p.type === 'salary_adjustment',
+                      }" />
+                    </div>
+                    <div class="rounded-lg bg-surface-50 dark:bg-surface-900/60 border border-surface-200 dark:border-surface-700 p-3">
+                      <div class="flex items-start justify-between gap-2">
+                        <div class="min-w-0">
+                          <div class="flex items-center gap-2 flex-wrap">
+                            <Tag :value="t(`hrm.career.types.${p.type}`)" :severity="promoTypeSeverity(p.type)" class="!text-[10px] !py-0" />
+                            <span class="font-mono text-xs text-surface-500">{{ formatDate(p.effective_date) }}</span>
+                          </div>
+                          <!-- Position / role transition line -->
+                          <div v-if="p.previous_position || p.new_position || p.previous_role_name || p.new_role_name" class="text-sm mt-1.5">
+                            <span class="text-surface-500">{{ p.previous_position?.title ?? p.previous_role_name ?? '—' }}</span>
+                            <i class="pi pi-arrow-right text-[10px] mx-2 text-surface-400" />
+                            <span class="font-semibold">{{ p.new_position?.title ?? p.new_role_name ?? '—' }}</span>
+                          </div>
+                          <!-- Department transition (if changed) -->
+                          <div v-if="p.previous_department || p.new_department" class="text-xs text-surface-500 mt-0.5">
+                            <i class="pi pi-sitemap text-[10px] mr-1" />
+                            {{ p.previous_department?.name ?? '—' }}
+                            <i class="pi pi-arrow-right text-[10px] mx-1" />
+                            <span class="text-surface-700 dark:text-surface-300">{{ p.new_department?.name ?? '—' }}</span>
+                          </div>
+                          <!-- Salary delta -->
+                          <div v-if="p.new_salary != null" class="text-xs text-surface-500 mt-0.5">
+                            <i class="pi pi-dollar text-[10px] mr-1" />
+                            <span v-if="p.previous_salary != null">{{ formatMoney(p.previous_salary) }}</span>
+                            <span v-else>—</span>
+                            <i class="pi pi-arrow-right text-[10px] mx-1" />
+                            <span class="font-mono font-semibold text-surface-700 dark:text-surface-300">{{ formatMoney(p.new_salary) }}</span>
+                            <code v-if="p.currency" class="font-mono text-[10px] text-surface-400 ml-1">{{ p.currency }}</code>
+                          </div>
+                          <!-- Reason -->
+                          <p v-if="p.reason" class="text-xs text-surface-600 dark:text-surface-300 mt-2 whitespace-pre-wrap">{{ p.reason }}</p>
+                          <!-- Approver -->
+                          <div v-if="p.approver" class="text-[11px] text-surface-400 mt-2 inline-flex items-center gap-1">
+                            <i class="pi pi-check-circle text-[10px]" />
+                            {{ t('hrm.career.approvedBy') }}: {{ p.approver.first_name }} {{ p.approver.last_name }}
+                          </div>
+                        </div>
+                        <Button
+                          icon="pi pi-trash"
+                          text rounded size="small" severity="danger"
+                          :title="t('common.delete')"
+                          @click="onDeletePromo(p)"
+                        />
+                      </div>
+                    </div>
+                  </li>
+                </ol>
+              </template>
+            </Card>
+          </TabPanel>
         </TabPanels>
       </Tabs>
     </template>
@@ -1043,6 +1270,89 @@ const onSaveUser = handleUser(async (values) => {
       <template #footer>
         <Button :label="t('common.cancel')" severity="secondary" text :disabled="userSaving" @click="userDialog = false" />
         <Button :label="t('hrm.users.actions.createAccount')" icon="pi pi-check" :loading="userSaving" @click="onSaveUser" />
+      </template>
+    </Dialog>
+
+    <!-- Record promotion / transfer / salary adjustment dialog -->
+    <Dialog
+      v-model:visible="promoDialog"
+      modal
+      :header="t('hrm.career.dialogTitle')"
+      :style="{ width: '40rem' }"
+      :pt="{ root: { class: '!max-w-[95vw]' } }"
+    >
+      <form class="space-y-4" @submit.prevent="onSavePromo">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <FormLabel :label="t('hrm.career.fields.type')" required />
+            <Select v-model="pType" :options="promoTypes" option-label="label" option-value="value" class="w-full" :invalid="!!pErrors.type" />
+          </div>
+          <div>
+            <FormLabel :label="t('hrm.career.fields.effectiveDate')" required />
+            <DatePicker v-model="pEffectiveDate as any" date-format="yy-mm-dd" show-icon icon-display="input" class="w-full" :placeholder="t('common.placeholders.date')" />
+            <small v-if="pErrors.effective_date" class="text-red-500 text-xs mt-1 block">{{ pErrors.effective_date }}</small>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <FormLabel :label="t('hrm.career.fields.newPosition')" />
+            <Select
+              v-model="pNewPositionId"
+              :options="promoPositions"
+              option-label="title"
+              option-value="id"
+              show-clear
+              filter
+              class="w-full"
+              :loading="promoLookupsLoading"
+              :placeholder="t('hrm.career.placeholders.position')"
+            />
+          </div>
+          <div>
+            <FormLabel :label="t('hrm.career.fields.newDepartment')" />
+            <Select
+              v-model="pNewDepartmentId"
+              :options="promoDepartments"
+              option-label="name"
+              option-value="id"
+              show-clear
+              filter
+              class="w-full"
+              :loading="promoLookupsLoading"
+              :placeholder="t('hrm.career.placeholders.department')"
+            />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <FormLabel :label="t('hrm.career.fields.newRoleName')" />
+            <InputText v-model="pNewRoleName" class="w-full" :placeholder="t('hrm.career.placeholders.roleName')" />
+          </div>
+          <div>
+            <FormLabel :label="t('hrm.career.fields.newSalary')" />
+            <InputNumber v-model="pNewSalary" mode="decimal" class="w-full" :placeholder="t('hrm.career.placeholders.salary')" />
+          </div>
+        </div>
+
+        <div>
+          <FormLabel :label="t('hrm.career.fields.reason')" />
+          <Textarea v-model="pReason" rows="3" class="w-full" :placeholder="t('hrm.career.placeholders.reason')" />
+        </div>
+
+        <div class="flex items-center gap-2 pt-1">
+          <ToggleSwitch v-model="pApplyNow" input-id="promo-apply-now" />
+          <label for="promo-apply-now" class="text-sm">
+            {{ t('hrm.career.applyNow') }}
+            <span class="block text-[11px] text-surface-500">{{ t('hrm.career.applyNowHint') }}</span>
+          </label>
+        </div>
+      </form>
+
+      <template #footer>
+        <Button :label="t('common.cancel')" severity="secondary" text :disabled="promoSaving" @click="promoDialog = false" />
+        <Button :label="t('common.save')" icon="pi pi-check" :loading="promoSaving" @click="onSavePromo" />
       </template>
     </Dialog>
   </div>

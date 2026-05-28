@@ -9,6 +9,7 @@ use App\Tenants\Modules\HRM\Models\EmployeeAddress;
 use App\Tenants\Modules\HRM\Models\EmployeeContract;
 use App\Tenants\Modules\HRM\Models\EmployeeEducation;
 use App\Tenants\Modules\HRM\Models\EmployeeEmergencyContact;
+use App\Tenants\Modules\HRM\Models\EmployeePromotion;
 use App\Tenants\Modules\HRM\Models\EmployeeSpouse;
 use App\Tenants\Modules\IAM\Services\WorkflowStatusService;
 use DomainException;
@@ -286,6 +287,61 @@ class EmployeeService
         $employee->restore();
         $employee->update(['status' => 'active', 'termination_date' => null]);
         return $employee->refresh();
+    }
+
+    /**
+     * Record a position/department/salary change in the career journal,
+     * and (when `apply_now=true`) also update the live Employee row.
+     *
+     * `apply_now=false` is for backfilling historical events (e.g. "the
+     * person was promoted in 2024, we're entering it now for the audit
+     * trail") where the current Employee row should NOT shift.
+     *
+     * Snapshots: the controller computes the `previous_*` fields from
+     * the current Employee row before calling this method, so the
+     * journal always shows the true delta even when subsequent edits
+     * mutate the live row later.
+     */
+    public function recordPromotion(Employee $employee, array $data): EmployeePromotion
+    {
+        $applyNow = (bool) ($data['apply_now'] ?? true);
+
+        return DB::transaction(function () use ($employee, $data, $applyNow) {
+            $promotion = EmployeePromotion::create([
+                'employee_id'            => $employee->id,
+                'effective_date'         => $data['effective_date'],
+                'type'                   => $data['type'] ?? 'promotion',
+                'previous_position_id'   => $data['previous_position_id']   ?? $employee->position_id,
+                'new_position_id'        => $data['new_position_id']        ?? null,
+                'previous_department_id' => $data['previous_department_id'] ?? $employee->department_id,
+                'new_department_id'      => $data['new_department_id']      ?? null,
+                'previous_role_name'     => $data['previous_role_name']     ?? $employee->role_name,
+                'new_role_name'          => $data['new_role_name']          ?? null,
+                'previous_salary'        => $data['previous_salary']        ?? $employee->base_salary,
+                'new_salary'             => $data['new_salary']             ?? null,
+                'currency'               => $data['currency']               ?? $employee->currency,
+                'reason'                 => $data['reason']                 ?? null,
+                'approved_by'            => $data['approved_by']            ?? null,
+            ]);
+
+            if ($applyNow) {
+                // Only overwrite fields the caller actually supplied — a
+                // pure salary adjustment doesn't touch position; a lateral
+                // move doesn't touch salary.
+                $updates = [];
+                if (! empty($data['new_position_id']))   $updates['position_id']   = $data['new_position_id'];
+                if (! empty($data['new_department_id'])) $updates['department_id'] = $data['new_department_id'];
+                if (! empty($data['new_role_name']))     $updates['role_name']     = $data['new_role_name'];
+                if (! empty($data['new_salary']))        $updates['base_salary']   = $data['new_salary'];
+                if ($updates) $employee->forceFill($updates)->save();
+            }
+
+            return $promotion->fresh([
+                'previousPosition:id,title', 'newPosition:id,title',
+                'previousDepartment:id,name', 'newDepartment:id,name',
+                'approver:id,first_name,last_name,employee_id',
+            ]);
+        });
     }
 
     /**

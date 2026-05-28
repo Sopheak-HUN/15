@@ -24,9 +24,7 @@ use App\Tenants\Modules\HRM\Controllers\PayslipController;
 use App\Tenants\Modules\HRM\Controllers\VacancyController;
 use App\Tenants\Modules\HRM\Controllers\ApplicationController;
 use App\Tenants\Modules\HRM\Controllers\InterviewController;
-use App\Tenants\Modules\HRM\Controllers\AppraisalCycleController;
-use App\Tenants\Modules\HRM\Controllers\AppraisalController;
-use App\Tenants\Modules\HRM\Controllers\SuggestionController;
+use App\Tenants\Modules\HRM\Controllers\EmployeePromotionController;
 use App\Tenants\Modules\HRM\Controllers\EmployeeNoteController;
 use App\Tenants\Modules\HRM\Controllers\EmployeeDocumentController;
 use App\Tenants\Modules\HRM\Controllers\AttendanceController;
@@ -131,7 +129,22 @@ Route::middleware([
             });
             Route::middleware('permission:hrm.employee.delete')->delete('employees/{employee}', [EmployeeController::class, 'destroy']);
 
-            // Leave
+            // Career journal (promotions / transfers / salary adjustments).
+            // Read gated under employee.read; write gated under employee.write.
+            Route::middleware('permission:hrm.employee.read')->group(function () {
+                Route::get('employees/{employeeId}/promotions', [EmployeePromotionController::class, 'index']);
+            });
+            Route::middleware('permission:hrm.employee.write')->group(function () {
+                Route::post('employees/{employeeId}/promotions', [EmployeePromotionController::class, 'store']);
+                Route::delete('employees/{employeeId}/promotions/{promotion}', [EmployeePromotionController::class, 'destroy']);
+            });
+
+            // Leave — split into three permission bands so a regular
+            // employee (hrm.leave.write = "submit own") can't approve
+            // their own request or edit the company-wide leave-type
+            // catalog. The controller's index/show methods also auto-
+            // scope the result set to the caller's own employee when
+            // they lack hrm.employee.read (i.e. they're a staff user).
             Route::middleware('permission:hrm.leave.read')->group(function () {
                 Route::get('leave-types', [LeaveTypeController::class, 'index']);
                 Route::get('leave-types/{leave_type}', [LeaveTypeController::class, 'show']);
@@ -139,13 +152,18 @@ Route::middleware([
                 Route::get('leave-requests/{leave_request}', [LeaveRequestController::class, 'show']);
                 Route::get('employees/{employeeId}/leave-balances', [LeaveRequestController::class, 'balances']);
             });
-            Route::middleware('permission:hrm.leave.write')->group(function () {
+            // Submit own leave
+            Route::middleware('permission:hrm.leave.write')->post('leave-requests', [LeaveRequestController::class, 'store']);
+            // Approve / reject — manager-only
+            Route::middleware('permission:hrm.leave.approve')->group(function () {
+                Route::post('leave-requests/{leave_request}/approve', [LeaveRequestController::class, 'approve']);
+                Route::post('leave-requests/{leave_request}/reject',  [LeaveRequestController::class, 'reject']);
+            });
+            // Catalog management — HR-only
+            Route::middleware('permission:hrm.leave.manage')->group(function () {
                 Route::apiResource('leave-types', LeaveTypeController::class)
                     ->parameters(['leave-types' => 'leave_type'])
                     ->only(['store', 'update', 'destroy']);
-                Route::post('leave-requests', [LeaveRequestController::class, 'store']);
-                Route::post('leave-requests/{leave_request}/approve', [LeaveRequestController::class, 'approve']);
-                Route::post('leave-requests/{leave_request}/reject',  [LeaveRequestController::class, 'reject']);
             });
 
             // Payroll
@@ -190,34 +208,6 @@ Route::middleware([
                 Route::post('interviews/{interview}/feedbacks', [InterviewController::class, 'storeFeedback']);
             });
 
-            // Performance
-            Route::middleware('permission:hrm.performance.read')->group(function () {
-                Route::get('appraisal-cycles', [AppraisalCycleController::class, 'index']);
-                Route::get('appraisal-cycles/{appraisal_cycle}', [AppraisalCycleController::class, 'show']);
-                Route::get('appraisals', [AppraisalController::class, 'index']);
-                Route::get('appraisals/{appraisal}', [AppraisalController::class, 'show']);
-            });
-            Route::middleware('permission:hrm.performance.write')->group(function () {
-                Route::apiResource('appraisal-cycles', AppraisalCycleController::class)
-                    ->parameters(['appraisal-cycles' => 'appraisal_cycle'])
-                    ->only(['store', 'update', 'destroy']);
-                Route::post('appraisals', [AppraisalController::class, 'store']);
-                Route::post('appraisals/{appraisal}/submit', [AppraisalController::class, 'submit']);
-                Route::post('appraisals/{appraisal}/review', [AppraisalController::class, 'review']);
-                Route::post('appraisals/{appraisal}/close',  [AppraisalController::class, 'close']);
-            });
-
-            // Suggestions — any employee can submit/read, no dedicated perm
-            // exists in the catalog yet. Gate read on hrm.employee.read so
-            // a user who can't see the org tree also can't see suggestions.
-            Route::middleware('permission:hrm.employee.read')->group(function () {
-                Route::get('suggestions', [SuggestionController::class, 'index']);
-                Route::get('suggestions/{suggestion}', [SuggestionController::class, 'show']);
-                Route::post('suggestions', [SuggestionController::class, 'store']);
-                Route::delete('suggestions/{suggestion}', [SuggestionController::class, 'destroy']);
-                Route::post('suggestions/{suggestion}/transition', [SuggestionController::class, 'transition']);
-            });
-
             // Notes & Documents — employee-scoped records.
             Route::middleware('permission:hrm.employee.read')->group(function () {
                 Route::get('employee-notes', [EmployeeNoteController::class, 'index']);
@@ -242,6 +232,8 @@ Route::middleware([
             Route::middleware('permission:hrm.attendance.write')->group(function () {
                 Route::apiResource('attendances', AttendanceController::class)->only(['store', 'update', 'destroy']);
                 Route::post('attendance/check-in',  [AttendanceController::class, 'checkIn']);
+                Route::post('attendance/break-out', [AttendanceController::class, 'breakOut']);
+                Route::post('attendance/break-in',  [AttendanceController::class, 'breakIn']);
                 Route::post('attendance/check-out', [AttendanceController::class, 'checkOut']);
             });
         });

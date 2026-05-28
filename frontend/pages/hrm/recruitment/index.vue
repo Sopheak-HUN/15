@@ -168,24 +168,174 @@ const statusSeverity = (s: string) => {
   return 'secondary'
 }
 
-// ---------------- Applications ----------------
-const appPage = ref(1)
-const appStatus = ref<string | null>(null)
+// ---------------- Applications (Kanban) ----------------
+// Kanban view fetches the full pipeline at once and groups client-side
+// by status. We cap at 500 cards — beyond that a kanban becomes unusable
+// regardless of pagination, and the vacancy filter is the right escape
+// hatch. If a tenant ever hits this ceiling we'll add a server-side
+// "summary by status" endpoint.
 const appVacancy = ref<string | null>(null)
-const appSelected = ref<Application[]>([])
+const appSearch  = ref<string>('')
 const { data: appData, refresh: refreshApps, pending: appPending } = await useAsyncData(
   'hrm-applications',
   () => hrm.listApplications({
-    status: appStatus.value || undefined,
     vacancy_id: appVacancy.value || undefined,
-    page: appPage.value, per_page: 25,
+    per_page: 500,
   }),
-  { watch: [appPage, appStatus, appVacancy] },
+  { watch: [appVacancy] },
 )
-const apps = computed<Application[]>(() => appData.value?.data?.data ?? [])
-const appMeta = computed(() => appData.value?.data)
+const allApps = computed<Application[]>(() => appData.value?.data?.data ?? [])
+// `apps` retained for unchanged consumers (interview filter + dialog).
+const apps = allApps
 
+// Candidate search runs purely client-side over the already-fetched list.
+const filteredApps = computed<Application[]>(() => {
+  const term = appSearch.value.trim().toLowerCase()
+  if (!term) return allApps.value
+  return allApps.value.filter((a) =>
+    (a.first_name + ' ' + a.last_name).toLowerCase().includes(term)
+    || a.email.toLowerCase().includes(term)
+    || (a.vacancy?.title ?? '').toLowerCase().includes(term)
+  )
+})
+
+// Pipeline columns — the five-stage linear funnel. Rejected/Withdrawn
+// are intentionally NOT board columns (they'd clutter the active view);
+// users can still move applications there via the pencil/transition
+// dialog on each card, and the List view shows everything.
+//
+// `pill` is a flat color class for the column header (matches the
+// screenshot's grouping: blue for early stages, amber for active
+// pipeline, green for the final win). Pure cosmetic — backend cares
+// only about the `key`.
+interface KanbanColumn {
+  key: string
+  pill: string  // Tailwind classes for the column-header chip
+}
+const pipelineColumns: KanbanColumn[] = [
+  { key: 'applied',    pill: 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300' },
+  { key: 'screening',  pill: 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300' },
+  { key: 'interview',  pill: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' },
+  { key: 'offer',      pill: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' },
+  { key: 'hired',      pill: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' },
+]
+// Full status set — used by the transition dialog and the List view.
 const applicationStatuses = ['applied', 'screening', 'interview', 'offer', 'hired', 'rejected', 'withdrawn']
+
+// Board (default kanban) vs. List (flat data-table fallback). Persisted
+// in localStorage so the user's preference survives a page reload.
+const viewMode = ref<'board' | 'list'>('board')
+if (import.meta.client) {
+  const saved = localStorage.getItem('hrm.recruitment.viewMode')
+  if (saved === 'board' || saved === 'list') viewMode.value = saved
+  watch(viewMode, (v) => localStorage.setItem('hrm.recruitment.viewMode', v))
+}
+
+// ── Card-level display helpers ────────────────────────────────
+// Relative time-ago for the card footer. Falls back to a localized
+// date string past 30 days so we don't surface absurd values like
+// "215 days ago" — recruiters care about staleness, not exact age.
+const timeAgo = (iso?: string | null): string => {
+  if (!iso) return ''
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000
+  if (diff < 60)        return t('hrm.recruitment.applications.timeAgo.justNow')
+  if (diff < 3600)      return t('hrm.recruitment.applications.timeAgo.mAgo', { n: Math.floor(diff / 60) })
+  if (diff < 86400)     return t('hrm.recruitment.applications.timeAgo.hAgo', { n: Math.floor(diff / 3600) })
+  if (diff < 30 * 86400) return t('hrm.recruitment.applications.timeAgo.dAgo', { n: Math.floor(diff / 86400) })
+  return new Date(iso).toLocaleDateString()
+}
+
+// Show a NEW badge on cards created within the last 48 hours. Keeps
+// the funnel scannable — recruiters often want to know what just came
+// in without having to sort.
+const isNewApp = (iso?: string | null): boolean => {
+  if (!iso) return false
+  return (Date.now() - new Date(iso).getTime()) < 48 * 3600 * 1000
+}
+
+// Group applications by status. Pre-seed every known status (including
+// the off-board rejected/withdrawn) so the List view and column count
+// chips always have a stable shape.
+const appsByStatus = computed<Record<string, Application[]>>(() => {
+  const buckets: Record<string, Application[]> = {}
+  for (const k of applicationStatuses) buckets[k] = []
+  for (const a of filteredApps.value) {
+    if (buckets[a.status]) buckets[a.status].push(a)
+  }
+  return buckets
+})
+
+// ── Drag-and-drop ─────────────────────────────────────────────
+// Native HTML5: dragstart sets the payload, dragover.prevent on the
+// column allows drop, drop fires the transition. We optimistically
+// move the card immediately (so it feels instant) and roll back if
+// the backend rejects the transition (e.g. illegal status path).
+const draggingId   = ref<string | null>(null)
+const draggingFrom = ref<string | null>(null)
+const dragOverCol  = ref<string | null>(null)
+
+const onDragStart = (e: DragEvent, app: Application) => {
+  draggingId.value   = app.id
+  draggingFrom.value = app.status
+  // dataTransfer is required for the drag to actually fire on Firefox.
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', app.id)
+  }
+}
+
+const onDragEnd = () => {
+  draggingId.value   = null
+  draggingFrom.value = null
+  dragOverCol.value  = null
+}
+
+const onColDragOver = (e: DragEvent, colKey: string) => {
+  if (!draggingId.value) return
+  e.preventDefault()
+  dragOverCol.value = colKey
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+}
+
+const onColDragLeave = (colKey: string) => {
+  if (dragOverCol.value === colKey) dragOverCol.value = null
+}
+
+const onColDrop = async (e: DragEvent, colKey: string) => {
+  e.preventDefault()
+  const id   = draggingId.value
+  const from = draggingFrom.value
+  dragOverCol.value = null
+  draggingId.value = null
+  draggingFrom.value = null
+  if (!id || !from || from === colKey) return
+
+  // Optimistic move: mutate the in-memory list so the card jumps
+  // columns immediately. allApps is derived from appData.value.data.data
+  // which is reactive, so editing it in place works.
+  const list = appData.value?.data?.data
+  if (!list) return
+  const row = list.find((a: Application) => a.id === id)
+  if (!row) return
+  const prevStatus = row.status
+  row.status = colKey
+
+  try {
+    await hrm.transitionApplication(id, colKey)
+    toast.add({ severity: 'success', summary: t('hrm.recruitment.toast.applicationTransitioned'), life: 1800 })
+  } catch (err: unknown) {
+    // Roll back the optimistic move.
+    row.status = prevStatus
+    const data = (err as { data?: { message?: string } }).data
+    toast.add({ severity: 'error', summary: t('hrm.common.saveFailed'), detail: data?.message, life: 5000 })
+  }
+}
+
+// Bulk-convert lives on the Hired column header now (the multi-select
+// table is gone). Converts every unlinked hired application visible in
+// the current filter.
+const hiredUnlinked = computed(() =>
+  appsByStatus.value.hired.filter((a) => !a.employee_id))
 
 const appDialog = ref(false)
 const appSaving = ref(false)
@@ -304,12 +454,19 @@ const revertApp = (row: Application) => {
   })
 }
 
+// Bulk-convert every unlinked hire visible in the current filter. The
+// button lives on the Hired column header — there's no row-selection
+// model in the kanban view, so the action is "convert all visible
+// hired-and-unlinked candidates" instead of a checkbox-driven subset.
 const bulkConvert = () => {
-  const ids = appSelected.value
-    .filter((a) => a.status === 'hired' && !a.employee_id)
-    .map((a) => a.id)
+  const ids = hiredUnlinked.value.map((a) => a.id)
   if (!ids.length) {
-    toast.add({ severity: 'warn', summary: t('hrm.recruitment.applications.actions.bulkConvert'), detail: 'Select hired-and-unlinked rows first.', life: 4000 })
+    toast.add({
+      severity: 'warn',
+      summary: t('hrm.recruitment.applications.actions.bulkConvert'),
+      detail: t('hrm.recruitment.applications.bulkConvertEmpty'),
+      life: 4000,
+    })
     return
   }
   confirm.require({
@@ -331,7 +488,6 @@ const bulkConvert = () => {
           }),
           life: 6000,
         })
-        appSelected.value = []
         await refreshApps()
       } catch (err: unknown) {
         const data = (err as { data?: { message?: string } }).data
@@ -445,12 +601,6 @@ const onDeleteIntv = (row: Interview) => {
       <div class="flex items-center gap-2">
         <Button v-if="tab === 'vacancies'"    :label="t('hrm.recruitment.vacancies.new')"  icon="pi pi-plus" @click="openVacCreate" />
         <Button v-if="tab === 'applications'" :label="t('hrm.recruitment.applications.new')" icon="pi pi-plus" @click="openAppCreate" />
-        <Button v-if="tab === 'applications' && appSelected.length"
-          :label="t('hrm.recruitment.applications.actions.bulkConvert')"
-          icon="pi pi-users"
-          severity="secondary"
-          @click="bulkConvert"
-        />
         <Button v-if="tab === 'interviews'"   :label="t('hrm.recruitment.interviews.new')" icon="pi pi-plus" @click="openIntvCreate" />
       </div>
     </div>
@@ -500,26 +650,228 @@ const onDeleteIntv = (row: Interview) => {
           </Card>
         </TabPanel>
 
-        <!-- Applications -->
+        <!-- Applications — Candidate Pipeline (kanban + list) -->
         <TabPanel value="applications">
           <Card>
             <template #content>
-              <div class="flex flex-wrap items-center gap-3 mb-4">
-                <Select v-model="appStatus" :options="applicationStatuses" :placeholder="t('hrm.common.status')" show-clear class="w-44" />
-                <Select v-model="appVacancy" :options="vacancies" option-label="title" option-value="id" :placeholder="t('hrm.recruitment.applications.columns.vacancy')" show-clear class="w-72" />
+              <!-- Title bar: matches the screenshot's "Candidate Pipeline"
+                   intro + Board/List view toggle + quick actions. -->
+              <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-5">
+                <div>
+                  <h2 class="text-xl font-semibold tracking-tight">{{ t('hrm.recruitment.applications.pipeline.title') }}</h2>
+                  <p class="text-sm text-surface-500 mt-0.5">{{ t('hrm.recruitment.applications.pipeline.subtitle') }}</p>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <!-- View toggle. Two segmented buttons, Board on left. -->
+                  <div class="inline-flex rounded-md border border-surface-200 dark:border-surface-700 p-0.5 bg-surface-0 dark:bg-surface-900">
+                    <button
+                      type="button"
+                      class="px-3 py-1.5 text-xs font-medium rounded inline-flex items-center gap-1.5 transition-colors"
+                      :class="viewMode === 'board'
+                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                        : 'text-surface-500 hover:text-surface-700 dark:hover:text-surface-300'"
+                      @click="viewMode = 'board'"
+                    >
+                      <i class="pi pi-th-large text-xs" /> {{ t('hrm.recruitment.applications.pipeline.viewBoard') }}
+                    </button>
+                    <button
+                      type="button"
+                      class="px-3 py-1.5 text-xs font-medium rounded inline-flex items-center gap-1.5 transition-colors"
+                      :class="viewMode === 'list'
+                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                        : 'text-surface-500 hover:text-surface-700 dark:hover:text-surface-300'"
+                      @click="viewMode = 'list'"
+                    >
+                      <i class="pi pi-list text-xs" /> {{ t('hrm.recruitment.applications.pipeline.viewList') }}
+                    </button>
+                  </div>
+                  <Button
+                    :label="t('hrm.recruitment.applications.new')"
+                    icon="pi pi-user-plus"
+                    severity="success"
+                    @click="openAppCreate"
+                  />
+                  <Button
+                    :label="t('hrm.recruitment.applications.pipeline.postJob')"
+                    icon="pi pi-plus"
+                    severity="secondary"
+                    outlined
+                    @click="openVacCreate"
+                  />
+                </div>
               </div>
+
+              <!-- Filter row: prominent search + vacancy filter. -->
+              <div class="flex flex-col sm:flex-row gap-3 mb-5">
+                <IconField icon-position="left" class="flex-1">
+                  <InputIcon class="pi pi-search" />
+                  <InputText
+                    v-model="appSearch"
+                    :placeholder="t('hrm.recruitment.applications.searchPlaceholder')"
+                    class="w-full"
+                  />
+                </IconField>
+                <Select
+                  v-model="appVacancy"
+                  :options="vacancies"
+                  option-label="title"
+                  option-value="id"
+                  :placeholder="t('hrm.recruitment.applications.pipeline.allVacancies')"
+                  show-clear
+                  class="sm:w-72"
+                />
+              </div>
+
+              <div v-if="appPending" class="text-xs text-surface-500 inline-flex items-center gap-2 mb-2">
+                <i class="pi pi-spin pi-spinner" /> {{ t('hrm.common.loading') }}
+              </div>
+
+              <!-- ─────────── Board view ─────────── -->
+              <div v-if="viewMode === 'board'" class="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1">
+                <div
+                  v-for="col in pipelineColumns"
+                  :key="col.key"
+                  class="flex-shrink-0 w-72 rounded-xl bg-surface-50 dark:bg-surface-900/60 p-3 transition-colors"
+                  :class="dragOverCol === col.key ? 'ring-2 ring-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/20' : ''"
+                  @dragover="(e) => onColDragOver(e, col.key)"
+                  @dragleave="onColDragLeave(col.key)"
+                  @drop="(e) => onColDrop(e, col.key)"
+                >
+                  <!-- Column header: status pill + count + hired-only quick action -->
+                  <div class="flex items-center justify-between mb-3">
+                    <div
+                      class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider"
+                      :class="col.pill"
+                    >
+                      <span>{{ t(`hrm.recruitment.applications.kanban.statuses.${col.key}`) }}</span>
+                      <span class="opacity-70">({{ appsByStatus[col.key].length }})</span>
+                    </div>
+                    <Button
+                      v-if="col.key === 'hired' && hiredUnlinked.length"
+                      icon="pi pi-users"
+                      text rounded size="small" severity="success"
+                      :aria-label="t('hrm.recruitment.applications.actions.bulkConvert')"
+                      :title="t('hrm.recruitment.applications.actions.bulkConvert')"
+                      @click="bulkConvert"
+                    />
+                  </div>
+
+                  <!-- Cards -->
+                  <div class="space-y-3 min-h-[6rem]">
+                    <template v-if="appsByStatus[col.key].length">
+                      <div
+                        v-for="card in appsByStatus[col.key]"
+                        :key="card.id"
+                        draggable="true"
+                        class="group rounded-lg bg-surface-0 dark:bg-surface-800 border border-surface-200 dark:border-surface-700 p-3 shadow-sm cursor-grab active:cursor-grabbing transition-all"
+                        :class="draggingId === card.id ? 'opacity-40' : 'hover:shadow-md hover:-translate-y-0.5'"
+                        @dragstart="(e) => onDragStart(e, card)"
+                        @dragend="onDragEnd"
+                      >
+                        <!-- Avatar + title block -->
+                        <div class="flex items-start gap-2.5">
+                          <div class="size-8 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 grid place-items-center text-[11px] font-semibold uppercase flex-shrink-0">
+                            {{ (card.first_name?.[0] ?? '') + (card.last_name?.[0] ?? '') }}
+                          </div>
+                          <div class="min-w-0 flex-1">
+                            <div class="flex items-start justify-between gap-2">
+                              <div class="text-sm font-semibold truncate">
+                                {{ card.first_name }} {{ card.last_name }}
+                              </div>
+                              <span
+                                v-if="isNewApp(card.created_at)"
+                                class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 flex-shrink-0"
+                              >
+                                {{ t('hrm.recruitment.applications.pipeline.newBadge') }}
+                              </span>
+                            </div>
+                            <div v-if="card.vacancy" class="text-[11px] text-surface-500 truncate mt-0.5">
+                              <code class="font-mono">{{ card.vacancy.reference }}</code>
+                              <span class="mx-1">·</span>
+                              <span>{{ card.vacancy.title }}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- Footer: email + time + link badge -->
+                        <div class="mt-3 pt-3 border-t border-surface-100 dark:border-surface-700/60 flex items-center justify-between gap-2 text-[11px] text-surface-500">
+                          <div class="inline-flex items-center gap-1 min-w-0">
+                            <i class="pi pi-envelope text-[10px] flex-shrink-0" />
+                            <span class="truncate">{{ card.email }}</span>
+                          </div>
+                          <div class="inline-flex items-center gap-1 flex-shrink-0">
+                            <i class="pi pi-clock text-[10px]" />
+                            <span>{{ timeAgo(card.created_at) }}</span>
+                          </div>
+                        </div>
+
+                        <!-- Hover actions -->
+                        <div class="mt-1 flex items-center justify-between gap-2">
+                          <Tag
+                            v-if="card.employee"
+                            severity="success"
+                            :value="card.employee.employee_id"
+                            icon="pi pi-link"
+                            class="!text-[10px] !py-0"
+                          />
+                          <span v-else />
+                          <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              v-if="card.status === 'hired' && !card.employee_id"
+                              icon="pi pi-user-plus"
+                              text rounded size="small" severity="success"
+                              :aria-label="t('hrm.recruitment.applications.actions.convert')"
+                              :title="t('hrm.recruitment.applications.actions.convert')"
+                              @click.stop="convertApp(card)"
+                            />
+                            <Button
+                              v-if="card.employee_id && card.converted_at"
+                              icon="pi pi-undo"
+                              text rounded size="small" severity="warn"
+                              :aria-label="t('hrm.recruitment.applications.actions.revert')"
+                              :title="t('hrm.recruitment.applications.actions.revert')"
+                              @click.stop="revertApp(card)"
+                            />
+                            <Button
+                              icon="pi pi-pencil"
+                              text rounded size="small" severity="secondary"
+                              :aria-label="t('hrm.recruitment.applications.actions.transition')"
+                              :title="t('hrm.recruitment.applications.actions.transition')"
+                              @click.stop="openTransition(card)"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+                    <div
+                      v-else
+                      class="border-2 border-dashed border-surface-300 dark:border-surface-700 rounded-lg py-8 px-3 text-center text-xs text-surface-400"
+                    >
+                      {{ t('hrm.recruitment.applications.pipeline.dropHereTo', {
+                        status: t(`hrm.recruitment.applications.kanban.statuses.${col.key}`)
+                      }) }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ─────────── List view ─────────── -->
+              <!-- Flat DataTable view that includes rejected/withdrawn too,
+                   for when you need to find a candidate by name without
+                   scrolling the board. -->
               <DataTable
-                v-model:selection="appSelected"
-                :value="apps"
+                v-else
+                :value="filteredApps"
                 :loading="appPending"
                 data-key="id"
                 striped-rows
+                paginator
+                :rows="25"
                 class="text-sm"
               >
                 <template #empty>
                   <div class="py-10 text-center text-surface-500">{{ t('hrm.recruitment.applications.empty') }}</div>
                 </template>
-                <Column selection-mode="multiple" header-style="width:3rem" />
                 <Column :header="t('hrm.recruitment.applications.columns.candidate')">
                   <template #body="{ data }">
                     <div class="font-medium">{{ data.first_name }} {{ data.last_name }}</div>
@@ -541,33 +893,23 @@ const onDeleteIntv = (row: Interview) => {
                 </Column>
                 <Column :header="t('hrm.recruitment.applications.columns.linked')">
                   <template #body="{ data }">
-                    <span v-if="data.employee" class="inline-flex items-center gap-1">
-                      <Tag severity="success" :value="data.employee.employee_id" />
-                    </span>
+                    <Tag v-if="data.employee" severity="success" :value="data.employee.employee_id" />
                     <span v-else class="text-xs text-surface-400">{{ t('hrm.recruitment.applications.linkedNo') }}</span>
                   </template>
                 </Column>
-                <Column header="" body-class="text-right !py-2" :style="{ width: '220px' }">
+                <Column :header="t('hrm.recruitment.applications.columns.submitted')">
                   <template #body="{ data }">
-                    <Button icon="pi pi-pencil" text rounded severity="secondary" :aria-label="t('hrm.recruitment.applications.actions.transition')" @click="openTransition(data)" />
-                    <Button
-                      v-if="data.status === 'hired' && !data.employee_id"
-                      icon="pi pi-user-plus"
-                      text rounded severity="success"
-                      :aria-label="t('hrm.recruitment.applications.actions.convert')"
-                      @click="convertApp(data)"
-                    />
-                    <Button
-                      v-if="data.employee_id && data.converted_at"
-                      icon="pi pi-undo"
-                      text rounded severity="warn"
-                      :aria-label="t('hrm.recruitment.applications.actions.revert')"
-                      @click="revertApp(data)"
-                    />
+                    <span class="font-mono text-xs">{{ timeAgo(data.created_at) }}</span>
+                  </template>
+                </Column>
+                <Column header="" body-class="text-right" :style="{ width: '180px' }">
+                  <template #body="{ data }">
+                    <Button icon="pi pi-pencil" text rounded severity="secondary" :title="t('hrm.recruitment.applications.actions.transition')" @click="openTransition(data)" />
+                    <Button v-if="data.status === 'hired' && !data.employee_id" icon="pi pi-user-plus" text rounded severity="success" :title="t('hrm.recruitment.applications.actions.convert')" @click="convertApp(data)" />
+                    <Button v-if="data.employee_id && data.converted_at" icon="pi pi-undo" text rounded severity="warn" :title="t('hrm.recruitment.applications.actions.revert')" @click="revertApp(data)" />
                   </template>
                 </Column>
               </DataTable>
-              <Paginator v-if="appMeta && appMeta.last_page > 1" :rows="appMeta.per_page" :total-records="appMeta.total" :first="(appMeta.current_page - 1) * appMeta.per_page" @page="(e) => appPage = e.page + 1" />
             </template>
           </Card>
         </TabPanel>

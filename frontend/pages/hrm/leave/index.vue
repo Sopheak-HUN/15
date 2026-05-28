@@ -19,6 +19,12 @@ const tab = ref<'requests' | 'types'>('requests')
 // Staff submitting their own leave see a locked selector pre-filled with
 // themselves — they can't request leave for someone else.
 const canPickEmployee = computed(() => has('hrm.employee.write'))
+// Approve/reject is manager-only (hrm.leave.approve). Hidden from staff
+// in the detail dialog and from the requests list.
+const canApprove = computed(() => has('hrm.leave.approve'))
+// The leave-type catalog is HR-only (hrm.leave.manage). Staff don't see
+// the Types tab at all — they just consume leave types when submitting.
+const canManageTypes = computed(() => has('hrm.leave.manage'))
 
 // ---------- shared lookups ----------
 // Current user's employee profile — used as the default + locked value
@@ -440,7 +446,7 @@ const statusSeverity = (s: string) =>
         @click="openNewRequest"
       />
       <Button
-        v-else
+        v-else-if="canManageTypes"
         :label="t('hrm.leave.newType')"
         icon="pi pi-plus"
         @click="openTypeCreate"
@@ -450,7 +456,7 @@ const statusSeverity = (s: string) =>
     <Tabs v-model:value="tab">
       <TabList>
         <Tab value="requests">{{ t('hrm.leave.tabs.requests') }}</Tab>
-        <Tab value="types">{{ t('hrm.leave.tabs.types') }}</Tab>
+        <Tab v-if="canManageTypes" value="types">{{ t('hrm.leave.tabs.types') }}</Tab>
       </TabList>
       <TabPanels>
         <!-- Requests -->
@@ -667,7 +673,9 @@ const statusSeverity = (s: string) =>
       </div>
       <template #footer>
         <Button :label="t('common.close')" severity="secondary" text @click="detailDialog = false" />
-        <template v-if="detail?.status === 'pending'">
+        <!-- Approve/Reject are manager actions — hide from staff viewing
+             their own pending request. -->
+        <template v-if="detail?.status === 'pending' && canApprove">
           <Button
             :label="t('hrm.leave.actions.reject')"
             severity="danger"

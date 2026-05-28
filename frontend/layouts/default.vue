@@ -55,8 +55,6 @@ const nav = computed<NavEntry[]>(() => {
         { label: t('nav.attendance'),  icon: 'pi pi-clock',      to: '/hrm/attendance',  requires: 'hrm.attendance.read' },
         { label: t('nav.payroll'),     icon: 'pi pi-dollar',     to: '/hrm/payroll',     requires: 'hrm.payroll.read' },
         { label: t('nav.recruitment'), icon: 'pi pi-briefcase',  to: '/hrm/recruitment', requires: 'hrm.recruitment.read' },
-        { label: t('nav.performance'), icon: 'pi pi-chart-line', to: '/hrm/performance', requires: 'hrm.performance.read' },
-        { label: t('nav.suggestions'), icon: 'pi pi-comment',    to: '/hrm/suggestions', requires: 'hrm.employee.read' },
       ],
     },
   ]
@@ -78,6 +76,11 @@ const nav = computed<NavEntry[]>(() => {
 type PopupMenu = { toggle: (event: Event) => void }
 const userMenu = ref<PopupMenu | null>(null)
 const userActions = computed(() => [
+  {
+    label: t('user.profile'),
+    icon: 'pi pi-user',
+    command: () => router.push('/profile'),
+  },
   {
     label: t('user.mfa'),
     icon: 'pi pi-shield',

@@ -57,8 +57,6 @@
     "attendance": "វត្តមាន",
     "payroll": "បើកប្រាក់ខែ",
     "recruitment": "ការជ្រើសរើស",
-    "performance": "ការវាយតម្លៃ",
-    "suggestions": "សំណូមពរ",
     "groups": {
       "iam": "អត្តសញ្ញាណ & សិទ្ធិចូលប្រើ",
       "hrm": "ធនធានមនុស្ស"
@@ -68,9 +66,47 @@
   },
   "user": {
     "menu": "ម៉ឺនុយអ្នកប្រើ",
+    "profile": "ប្រវត្តិរូបរបស់ខ្ញុំ",
     "mfa": "ការផ្ទៀងផ្ទាត់ពីរកត្តា",
     "signOut": "ចេញពីគណនី",
     "signedOut": "បានចេញពីគណនី"
+  },
+  "profile": {
+    "editProfile": "កែប្រវត្តិរូប",
+    "tiles": {
+      "leaveUsed": "ច្បាប់បានប្រើ",
+      "leaveAvailable": "ច្បាប់នៅសល់",
+      "attendance": "វត្តមាន",
+      "todayStatus": "ថ្ងៃនេះ",
+      "daysThisYear": "ថ្ងៃក្នុងឆ្នាំនេះ",
+      "daysRemaining": "ថ្ងៃនៅសល់",
+      "presentThisMonth": "ថ្ងៃមកធ្វើការក្នុងខែនេះ",
+      "notClockedIn": "មិនទាន់ចូលធ្វើការ",
+      "days": "ថ្ងៃ"
+    },
+    "sections": {
+      "personal": "ព័ត៌មានផ្ទាល់ខ្លួន",
+      "department": "នាយកដ្ឋាន",
+      "manager": "ប្រធាននាយកដ្ឋាន",
+      "leaveBalances": "សមតុល្យច្បាប់",
+      "recentLeave": "ការស្នើច្បាប់ថ្មីៗ",
+      "recentAttendance": "វត្តមានថ្មីៗ",
+      "requestLeave": "ស្នើច្បាប់",
+      "career": "ប្រវត្តិអាជីពរបស់ខ្ញុំ"
+    },
+    "balances": {
+      "used": "បានប្រើ",
+      "pending": "កំពុងរង់ចាំ"
+    },
+    "empty": {
+      "balances": "មិនទាន់មានសមតុល្យច្បាប់ទេ។",
+      "requests": "អ្នកមិនទាន់បានដាក់ស្នើច្បាប់ណាមួយឡើយ។",
+      "attendance": "មិនមានកំណត់ត្រាវត្តមានក្នុងខែបច្ចុប្បន្ន។"
+    },
+    "unlinked": {
+      "title": "គណនីរបស់អ្នកមិនទាន់ត្រូវបានភ្ជាប់ជាមួយបុគ្គលិក",
+      "subtitle": "សូមទាក់ទងផ្នែកធនធានមនុស្សដើម្បីបង្កើតប្រវត្តិរូបបុគ្គលិករបស់អ្នក។"
+    }
   },
   "errors": {
     "forbidden": {
@@ -277,6 +313,44 @@
     "newValues": "តម្លៃថ្មី"
   },
   "hrm": {
+    "career": {
+      "tab": "ប្រវត្តិឯកសារកំណើន",
+      "title": "ប្រវត្តិការងារ",
+      "subtitle": "កាលប្បវត្តិនៃការផ្តល់តួនាទី ការផ្ទេរ និងការកែប្រែប្រាក់ខែ។",
+      "record": "កត់ត្រាការផ្តល់តួនាទី",
+      "dialogTitle": "កត់ត្រាការផ្លាស់ប្តូរអាជីព",
+      "empty": "មិនទាន់មានព្រឹត្តិការណ៍អាជីពទេ។",
+      "approvedBy": "អនុម័តដោយ",
+      "applyNow": "អនុវត្តលើប្រវត្តិរូបបច្ចុប្បន្ន",
+      "applyNowHint": "ក៏ធ្វើបច្ចុប្បន្នភាពតួនាទី នាយកដ្ឋាន និងប្រាក់ខែបច្ចុប្បន្នផងដែរ។ បិទដើម្បីបញ្ចូលទិន្នន័យអតីតកាល។",
+      "confirmDelete": "លុបព្រឹត្តិការណ៍កាលបរិច្ឆេទ {date} ឬ?",
+      "types": {
+        "promotion": "ឡើងតួនាទី",
+        "lateral": "ផ្ទេរ",
+        "demotion": "បន្ទាបតួនាទី",
+        "salary_adjustment": "កែប្រែប្រាក់ខែ"
+      },
+      "fields": {
+        "type": "ប្រភេទ",
+        "effectiveDate": "ថ្ងៃចូលជាធរមាន",
+        "newPosition": "មុខតំណែងថ្មី",
+        "newDepartment": "នាយកដ្ឋានថ្មី",
+        "newRoleName": "តួនាទីថ្មី",
+        "newSalary": "ប្រាក់ខែថ្មី",
+        "reason": "មូលហេតុ"
+      },
+      "placeholders": {
+        "position": "ជ្រើសរើសមុខតំណែង (មិនចាំបាច់)",
+        "department": "ជ្រើសរើសនាយកដ្ឋាន (មិនចាំបាច់)",
+        "roleName": "ឧ. វិស្វករផ្នែកទន់ជាន់ខ្ពស់",
+        "salary": "ប្រាក់ខែប្រចាំខែ",
+        "reason": "បរិបទនៃការផ្លាស់ប្តូរ…"
+      },
+      "toast": {
+        "recorded": "បានកត់ត្រាព្រឹត្តិការណ៍អាជីព",
+        "deleted": "បានលុបព្រឹត្តិការណ៍"
+      }
+    },
     "common": {
       "code": "កូដ",
       "title": "ចំណងជើង",
@@ -829,7 +903,37 @@
         "revertConfirm": "បកការបំលែងវិញ? អនុញ្ញាតក្នុង 7 ថ្ងៃ។",
         "bulkConvertHeader": "បំលែងជាក្រុម",
         "bulkConvertBody": "{count} ពាក្យសុំ។",
-        "bulkResult": "{converted} បំលែង · {linked} ភ្ជាប់ · {ineligible} មិនអាច · {missing} បាត់ · {errors} កំហុស"
+        "bulkConvertEmpty": "មិនមានបេក្ខជនជាប់ដែលត្រូវបំលែងនៅក្នុងតម្រងបច្ចុប្បន្នទេ។",
+        "bulkResult": "{converted} បំលែង · {linked} ភ្ជាប់ · {ineligible} មិនអាច · {missing} បាត់ · {errors} កំហុស",
+        "searchPlaceholder": "ស្វែងរកតាមឈ្មោះ ឬ អ៊ីមែល…",
+        "pipeline": {
+          "title": "បំពង់បេក្ខជន",
+          "subtitle": "អូសកាតរវាងជួរដើម្បីដំណើរការបេក្ខជន។",
+          "allVacancies": "មុខតំណែងទាំងអស់",
+          "viewBoard": "ផ្ទាំង",
+          "viewList": "បញ្ជី",
+          "postJob": "ប្រកាសការងារថ្មី",
+          "newBadge": "ថ្មី",
+          "dropHereTo": "ទម្លាក់ទីនេះដើម្បីផ្លាស់ទៅ {status}"
+        },
+        "timeAgo": {
+          "justNow": "ទើបតែ",
+          "mAgo": "{n} នាទីមុន",
+          "hAgo": "{n} ម៉ោងមុន",
+          "dAgo": "{n} ថ្ងៃមុន"
+        },
+        "kanban": {
+          "dropHere": "ទម្លាក់បេក្ខជននៅទីនេះ",
+          "statuses": {
+            "applied": "បានដាក់",
+            "screening": "ត្រួតពិនិត្យ",
+            "interview": "សម្ភាសន៍បច្ចេកទេស",
+            "offer": "បានផ្ញើសំណើ",
+            "hired": "ជាប់",
+            "rejected": "បដិសេធ",
+            "withdrawn": "ដកខ្លួន"
+          }
+        }
       },
       "interviews": {
         "new": "កំណត់ពេលសម្ភាសន៍",
@@ -865,75 +969,6 @@
         "interviewUpdated": "បានកែ",
         "feedbackSubmitted": "បានដាក់មតិ"
       }
-    },
-    "performance": {
-      "title": "ការវាយតម្លៃ",
-      "subtitle": "វដ្ត និងការវាយតម្លៃ។",
-      "tabs": {"cycles": "វដ្ត", "appraisals": "ការវាយតម្លៃ"},
-      "placeholders": {
-        "cycleName": "ឧ. ឆ្នាំ 2026 ឆមាសទី 1",
-        "ratingScale": "JSON array — ធាតុនីមួយៗមាន value (លេខ) និង label",
-        "cycle": "ជ្រើសរើសវដ្ត",
-        "employee": "ជ្រើសរើសបុគ្គលិក",
-        "reviewer": "ជ្រើសរើសអ្នកត្រួតពិនិត្យ (មិនបង្ខំ)",
-        "employeeComments": "ការវាយតម្លៃខ្លួនឯង…",
-        "overallScore": "0-100",
-        "managerComments": "មតិអ្នកគ្រប់គ្រង…"
-      },
-      "cycles": {
-        "new": "វដ្តថ្មី",
-        "empty": "មិនមាន។",
-        "columns": {"name": "ឈ្មោះ", "start": "ចាប់ផ្តើម", "end": "បញ្ចប់", "active": "សកម្ម"},
-        "fields": {
-          "name": "ឈ្មោះ",
-          "startDate": "ថ្ងៃចាប់ផ្តើម",
-          "endDate": "ថ្ងៃបញ្ចប់",
-          "isActive": "សកម្ម",
-          "ratingScale": "មាត្រដ្ឋាន (JSON)"
-        }
-      },
-      "appraisals": {
-        "new": "ការវាយតម្លៃថ្មី",
-        "empty": "មិនមាន។",
-        "columns": {"employee": "បុគ្គលិក", "cycle": "វដ្ត", "status": "ស្ថានភាព", "score": "ពិន្ទុ"},
-        "fields": {
-          "cycle": "វដ្ត",
-          "employee": "បុគ្គលិក",
-          "reviewer": "អ្នកត្រួតពិនិត្យ",
-          "responses": "ការឆ្លើយតប (JSON)",
-          "employeeComments": "ការវាយតម្លៃខ្លួន",
-          "managerComments": "មតិអ្នកគ្រប់គ្រង",
-          "overallScore": "ពិន្ទុ"
-        },
-        "actions": {"submit": "ដាក់ស្នើ", "review": "ត្រួតពិនិត្យ", "close": "បិទ"}
-      },
-      "toast": {
-        "cycleCreated": "បានបង្កើតវដ្ត",
-        "cycleUpdated": "បានកែ",
-        "cycleDeleted": "បានលុប",
-        "appraisalCreated": "បានបង្កើត",
-        "appraisalSubmitted": "បានដាក់ស្នើ",
-        "appraisalReviewed": "បានត្រួតពិនិត្យ",
-        "appraisalClosed": "បានបិទ"
-      }
-    },
-    "suggestions": {
-      "title": "សំណូមពរ",
-      "subtitle": "ការដាក់ស្នើដោយអនាមិកមិនបង្ហាញអត្តសញ្ញាណ។",
-      "new": "សំណូមពរថ្មី",
-      "empty": "មិនមាន។",
-      "anonymous": "អនាមិក",
-      "placeholders": {
-        "title": "ចំណងជើងខ្លី",
-        "category": "ជ្រើសរើសប្រភេទ",
-        "body": "ពិពណ៌នាគំនិត ឬ ការព្រួយបារម្ភរបស់អ្នក…",
-        "response": "ឆ្លើយតបទៅអ្នកដាក់ស្នើ (មិនបង្ខំ)"
-      },
-      "columns": {"title": "ចំណងជើង", "category": "ប្រភេទ", "status": "ស្ថានភាព", "submitted": "ដាក់ស្នើ"},
-      "form": {"title": "ចំណងជើង", "body": "មាតិកា", "category": "ប្រភេទ", "isAnonymous": "អនាមិក"},
-      "statuses": {"new": "ថ្មី", "acknowledged": "បានទទួលស្គាល់", "actioned": "បានធ្វើ", "dismissed": "បានបោះបង់"},
-      "actions": {"acknowledge": "ទទួលស្គាល់", "action": "បានធ្វើ", "dismiss": "បោះបង់", "response": "ឆ្លើយតប"},
-      "toast": {"submitted": "បានដាក់ស្នើ", "transitioned": "បានកែ", "deleted": "បានលុប"}
     },
     "notes": {
       "title": "កំណត់សម្គាល់ និងឯកសារ",
@@ -1064,11 +1099,43 @@
       },
       "toast": {
         "checkedIn": "បានកត់ត្រាចូលដោយជោគជ័យ",
+        "brokeOut": "បានចាប់ផ្តើមសម្រាក",
+        "brokeIn": "ស្វាគមន៍ត្រឡប់មកវិញ",
         "checkedOut": "បានកត់ត្រាចេញដោយជោគជ័យ",
         "created": "បានបង្កើតកំណត់ហេតុវត្តមានរួចរាល់",
         "updated": "បានធ្វើបច្ចុប្បន្នភាពកំណត់ហេតុវត្តមានរួចរាល់",
         "deleted": "បានលុបកំណត់ហេតុវត្តមានរួចរាល់"
       },
+      "tiles": {
+        "checkIn": "ចូលថ្ងៃនេះ",
+        "breakOut": "ចេញសម្រាក",
+        "breakIn": "ត្រឡប់ពីសម្រាក",
+        "checkOut": "ចេញពីការងារ"
+      },
+      "action": {
+        "checkIn": "កត់ត្រាចូល",
+        "breakOut": "ចេញសម្រាក",
+        "breakIn": "ត្រឡប់ពីសម្រាក",
+        "checkOut": "កត់ត្រាចេញ"
+      },
+      "statusValues": {
+        "present": "មកធ្វើការ",
+        "late": "យឺត",
+        "absent": "អវត្តមាន",
+        "half_day": "ពាក់កណ្ដាលថ្ងៃ",
+        "on_leave": "សម្រាក"
+      },
+      "recent": {
+        "title": "វត្តមាន ៦ ថ្ងៃចុងក្រោយ",
+        "empty": "មិនមានកំណត់ត្រាវត្តមានក្នុង ៦ ថ្ងៃចុងក្រោយ។",
+        "columns": {
+          "date": "កាលបរិច្ឆេទ",
+          "morning": "ព្រឹក",
+          "afternoon": "រសៀល",
+          "remarks": "សម្គាល់"
+        }
+      },
+      "dayComplete": "បានកត់ត្រាគ្រប់ ៤ ដងហើយ — ថ្ងៃនេះបានបញ្ចប់។",
       "noEmployee": "មិនទាន់មានប្រវត្តិរូបបុគ្គលិក",
       "noEmployeeDetail": "គណនីរបស់អ្នកមិនទាន់ភ្ជាប់ទៅនឹងប្រវត្តិរូបបុគ្គលិកឡើយ។ មុខងារកត់ត្រាវត្តមានផ្ទាល់ខ្លួនត្រូវបានបិទ ប៉ុន្តែអ្នកនៅតែអាចគ្រប់គ្រងវត្តមានបុគ្គលិកផ្សេងទៀតបាន ប្រសិនបើអ្នកមានសិទ្ធិ។"
     }

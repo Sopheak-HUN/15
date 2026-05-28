@@ -29,8 +29,25 @@ class EmployeeController extends Controller
             return response()->json(['data' => null]);
         }
 
+        // Eager-load department (with description + manager) so the
+        // /profile screen can render "your department" info without
+        // making a second call that would 403 for staff users.
         $employee = Employee::where('user_id', $userId)
-            ->with(['department:id,name', 'position:id,title'])
+            ->with([
+                'department:id,name,description,manager_id',
+                'department.manager:id,first_name,last_name,employee_id,email,phone',
+                'position:id,title',
+                'manager:id,first_name,last_name,employee_id',
+                'activeContract',
+                // Career journal so the profile page can render a
+                // read-only "My career" timeline without a follow-up call.
+                'promotions' => fn ($q) => $q->orderByDesc('effective_date')->orderByDesc('created_at'),
+                'promotions.previousPosition:id,title',
+                'promotions.newPosition:id,title',
+                'promotions.previousDepartment:id,name',
+                'promotions.newDepartment:id,name',
+                'promotions.approver:id,first_name,last_name,employee_id',
+            ])
             ->first();
 
         return response()->json(['data' => $employee]);
@@ -79,6 +96,15 @@ class EmployeeController extends Controller
                 'manager:id,first_name,last_name', 'user:id,email,handle',
                 'currentAddress', 'permanentAddress', 'emergencyAddress',
                 'spouse', 'emergencyContact', 'educations', 'activeContract', 'contracts',
+                // Promotions ordered newest-first so the detail page's
+                // Career tab can render the timeline directly from this
+                // payload without a follow-up fetch.
+                'promotions' => fn ($q) => $q->orderByDesc('effective_date')->orderByDesc('created_at'),
+                'promotions.previousPosition:id,title',
+                'promotions.newPosition:id,title',
+                'promotions.previousDepartment:id,name',
+                'promotions.newDepartment:id,name',
+                'promotions.approver:id,first_name,last_name,employee_id',
             ]),
         ]);
     }
