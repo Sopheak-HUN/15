@@ -4,6 +4,7 @@ namespace App\Tenants\Modules\HRM\Services;
 
 use App\Tenants\Modules\HRM\Models\Attendance;
 use App\Tenants\Modules\HRM\Models\Employee;
+use App\Tenants\Modules\IAM\Services\SettingService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
@@ -15,12 +16,16 @@ class AttendanceService
      * (e.g. you can't break_out before checking in).
      *
      * Per-half status: a morning is "late" when check_in lands after
-     * MORNING_LATE_AFTER; afternoon is "late" when break_in lands after
-     * AFTERNOON_LATE_AFTER. The legacy `status` column gets the worse
-     * of the two so older queries still mean something.
+     * the tenant-configured `attendance.morning_late_after` (default
+     * 09:00:00); afternoon equivalent is `attendance.afternoon_late_after`
+     * (default 13:30:00). The legacy `status` column gets the worse of
+     * the two so older queries still mean something.
      */
-    private const MORNING_LATE_AFTER   = '09:00:00';
-    private const AFTERNOON_LATE_AFTER = '13:30:00';
+    private const FALLBACK_MORNING_LATE_AFTER   = '09:00:00';
+    private const FALLBACK_AFTERNOON_LATE_AFTER = '13:30:00';
+    private const FALLBACK_WORKING_DAYS         = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+    public function __construct(protected SettingService $settings) {}
 
     public function checkIn(Employee $employee, ?string $notes = null): Attendance
     {
@@ -227,6 +232,15 @@ class AttendanceService
      */
     public function markAbsentForDate(string $date): int
     {
+        // Skip non-working days entirely so Sundays don't get every
+        // employee flagged absent. Day-of-week match uses the same
+        // 3-letter codes the settings UI exposes.
+        $dow = strtolower(\Carbon\Carbon::parse($date)->format('D'));  // e.g. "mon"
+        $dow = substr($dow, 0, 3);
+        if (! in_array($dow, $this->workingDays(), true)) {
+            return 0;
+        }
+
         $touched = 0;
 
         Employee::where('status', 'active')->select(['id'])->chunkById(200, function ($employees) use ($date, &$touched) {
@@ -262,12 +276,26 @@ class AttendanceService
 
     private function morningStatusFor(string $time): string
     {
-        return $time > self::MORNING_LATE_AFTER ? 'late' : 'present';
+        $threshold = $this->settings->get('attendance.morning_late_after', self::FALLBACK_MORNING_LATE_AFTER);
+        return $time > $threshold ? 'late' : 'present';
     }
 
     private function afternoonStatusFor(string $time): string
     {
-        return $time > self::AFTERNOON_LATE_AFTER ? 'late' : 'present';
+        $threshold = $this->settings->get('attendance.afternoon_late_after', self::FALLBACK_AFTERNOON_LATE_AFTER);
+        return $time > $threshold ? 'late' : 'present';
+    }
+
+    /**
+     * Lowercase 3-letter weekday names (mon..sun) from the tenant's
+     * settings. Used by the absent-marker cron to skip weekends.
+     *
+     * @return array<int, string>
+     */
+    private function workingDays(): array
+    {
+        $value = $this->settings->get('attendance.working_days', self::FALLBACK_WORKING_DAYS);
+        return is_array($value) ? array_values($value) : self::FALLBACK_WORKING_DAYS;
     }
 
     /**

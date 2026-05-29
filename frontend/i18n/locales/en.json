@@ -57,12 +57,73 @@
     "attendance": "Attendance",
     "payroll": "Payroll",
     "recruitment": "Recruitment",
+    "settings": "Settings",
     "groups": {
       "iam": "Identity & Access",
       "hrm": "Human Resources"
     },
     "expand": "Expand sidebar",
     "collapse": "Collapse sidebar"
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Configure tenant-wide policies, working hours, and behaviour.",
+    "readOnlyHint": "Read-only. Contact an admin to change these values.",
+    "toast": {
+      "saved": "Settings saved"
+    },
+    "time": {
+      "tab": "Time Management",
+      "title": "Time Management",
+      "subtitle": "Late thresholds, working hours, and working days that drive attendance behaviour.",
+      "sections": {
+        "lateThresholds": "Late thresholds",
+        "workingHours": "Working hours",
+        "workingDays": "Working days"
+      },
+      "fields": {
+        "morningLate": "Morning late after",
+        "afternoonLate": "Afternoon late after",
+        "workStart": "Work start time",
+        "workEnd": "Work end time"
+      },
+      "hints": {
+        "morningLate": "Check-ins after this time are flagged Late for the morning half.",
+        "afternoonLate": "Break-ins (after lunch) after this time are flagged Late for the afternoon half.",
+        "workingDays": "Days the auto-absent job marks missing employees as absent. Non-working days are skipped entirely."
+      },
+      "days": {
+        "mon": "Monday",
+        "tue": "Tuesday",
+        "wed": "Wednesday",
+        "thu": "Thursday",
+        "fri": "Friday",
+        "sat": "Saturday",
+        "sun": "Sunday"
+      }
+    },
+    "numbering": {
+      "tab": "Numbering",
+      "title": "Code numbering",
+      "subtitle": "Set the prefix, digit width, and starting number used to mint codes for each entity type.",
+      "types": {
+        "employee": "Employee code",
+        "quotation": "Quotation code",
+        "invoice": "Invoice code",
+        "asset": "Asset code"
+      },
+      "fields": {
+        "prefix": "Prefix",
+        "prefixPlaceholder": "e.g. TT-EMP-",
+        "digits": "Digits",
+        "startFrom": "Start from",
+        "nextNumber": "Next number"
+      },
+      "hints": {
+        "prefix": "Include the trailing separator if you want one (e.g. TT-EMP-).",
+        "nextNumber": "This is the very next number that will be issued. Change with care — duplicates can occur if you set it below a code already used."
+      }
+    }
   },
   "user": {
     "menu": "User menu",

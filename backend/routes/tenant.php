@@ -9,6 +9,7 @@ use App\Tenants\Modules\IAM\Controllers\RoleController;
 use App\Tenants\Modules\IAM\Controllers\PermissionController;
 use App\Tenants\Modules\IAM\Controllers\AuditLogController;
 use App\Tenants\Modules\IAM\Controllers\BrandingController;
+use App\Tenants\Modules\IAM\Controllers\SettingController;
 use App\Tenants\Modules\IAM\Controllers\SsoController;
 use App\Tenants\Modules\IAM\Controllers\WorkflowStatusController;
 
@@ -74,6 +75,13 @@ Route::middleware([
         // in the seeder TODO.
         Route::middleware('permission:iam.roles.view')->get('/api/iam/audit-logs', [AuditLogController::class, 'index']);
         Route::middleware('permission:iam.roles.edit')->put('/api/iam/branding', [BrandingController::class, 'update']);
+
+        // Tenant settings (key/value per group). Read needs `roles.view`
+        // as the "IAM admin" proxy; write needs `roles.edit`. Both can
+        // be split into dedicated perms later if regular employees
+        // ever need to see the catalog (e.g. to display working days).
+        Route::middleware('permission:iam.roles.view')->get('/api/iam/settings/{group}', [SettingController::class, 'show']);
+        Route::middleware('permission:iam.roles.edit')->put('/api/iam/settings/{group}', [SettingController::class, 'update']);
 
         Route::apiResource('/api/iam/sso-providers', SsoController::class)
             ->parameters(['sso-providers' => 'provider'])

@@ -57,6 +57,9 @@ const nav = computed<NavEntry[]>(() => {
         { label: t('nav.recruitment'), icon: 'pi pi-briefcase',  to: '/hrm/recruitment', requires: 'hrm.recruitment.read' },
       ],
     },
+    // Settings sits at the bottom — admin-only. Gated on iam.roles.view
+    // since it currently mirrors the IAM-admin proxy used elsewhere.
+    { label: t('nav.settings'), icon: 'pi pi-cog', to: '/settings', requires: 'iam.roles.view' },
   ]
 
   // Drop hidden items first, then drop entire groups that emptied out.
